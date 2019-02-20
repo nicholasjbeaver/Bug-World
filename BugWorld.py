@@ -96,6 +96,8 @@ import random
 import transforms3d.affines as AFF 
 import transforms3d.euler as E
 
+import * from Collisions
+
 #Color class so can separate out code from PG specific stuff.
 #http://www.discoveryplayground.com/computer-programming-for-kids/rgb-colors/
 class Color(): #RGB values
