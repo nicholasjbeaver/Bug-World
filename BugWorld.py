@@ -251,6 +251,7 @@ class BugWorld(): #defines the world, holds the objects, defines the rules of in
 	NUM_MEAT_FOOD = 1
 	NUM_OBSTACLES = 5
 	IDENTITY = [[1,0,0,0], [0,1,0,0], [0,0,1,0], [0,0,0,1]] #equates to x=0, y=0, z=0, rotation = 0
+	MAP_TO_CANVAS = [[1,0,0,0], [0,-1,0,BOUNDARY_HEIGHT], [0,0,-1,0], [0,0,0,1]] #map to change basis from lower left being 0,0 to canvas being upper left 0,0
 
 	WorldObjects = []
 	BWD = BWCollision_Dict() #instantiate a dictionary to handle collisions
@@ -266,7 +267,7 @@ class BugWorld(): #defines the world, holds the objects, defines the rules of in
 
 #--- Instance Methods	
 	def __init__(Self):
-		Self.rel_position = BugWorld.IDENTITY #sets the world as the root equates to x=0, y=0, z=0, rotation = 0
+		Self.rel_position = BugWorld.MAP_TO_CANVAS #sets the world as the root
 		for i in range(0, BugWorld.NUM_HERBIVORE_BUGS): #instantiate all of the Herbivores with a default name
 			start_pos = BugWorld.get_random_location_in_world()
 			Self.WorldObjects.append( Herbivore( start_pos, "H"+ str(i) ))
@@ -515,7 +516,7 @@ class Bug ( BWObject ):
 		Self.EYE_SIZE = int(Self.size * 0.50) #set a percentage the size of the bug
 		#instantiate the eyes
 		Self.RightEye = BugEye( Self.RIGHT_EYE_LOC, Self.EYE_SIZE )
-#		Self.RightEye.color = Color.RED
+		Self.RightEye.color = Color.RED
 
 		Self.LeftEye = BugEye( Self.LEFT_EYE_LOC, Self.EYE_SIZE )
 
