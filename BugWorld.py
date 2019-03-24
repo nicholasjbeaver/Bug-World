@@ -9,24 +9,24 @@ import pygame
 #assume 2D graphics and using Pygame to render.
 class PGObject():
 
-	def draw( Self, surface ):
+	def draw( Self, surface, fill=0 ): #fill = 0 means solid, = 1 means outline only
 		x = int(Self.get_abs_x())
 		y = int(Self.get_abs_y())
 
 
 		r,g,b = Self.color #unpack the tuple
 #modulate color based on health
-		# hp = Self.health/100 #what is the healt percentage
+		# hp = Self.health/100 #what is the health percentage
 		# r *= hp
 		# g *= hp
 		# b *= hp
 
-		pygame.draw.circle(surface, (int(r),int(g),int(b)), (x, y), Self.size, 0) 
+		pygame.draw.circle(surface, (int(r),int(g),int(b)), (x, y), Self.size, fill)
 	
-	def get_abs_x():
+	def get_abs_x(Self):
 		pass
 
-	def get_abs_y():
+	def get_abs_y(Self):
 		pass
 
 #world for simulations to happen 
@@ -96,7 +96,7 @@ import random
 import transforms3d.affines as AFF 
 import transforms3d.euler as E
 
-import * from Collisions
+from Collisions import *
 
 #Color class so can separate out code from PG specific stuff.
 #http://www.discoveryplayground.com/computer-programming-for-kids/rgb-colors/
@@ -251,6 +251,7 @@ class BugWorld(): #defines the world, holds the objects, defines the rules of in
 	NUM_MEAT_FOOD = 1
 	NUM_OBSTACLES = 5
 	IDENTITY = [[1,0,0,0], [0,1,0,0], [0,0,1,0], [0,0,0,1]] #equates to x=0, y=0, z=0, rotation = 0
+	MAP_TO_CANVAS = [[1,0,0,0], [0,-1,0,BOUNDARY_HEIGHT], [0,0,-1,0], [0,0,0,1]]
 
 	WorldObjects = []
 	BWD = BWCollision_Dict() #instantiate a dictionary to handle collisions
@@ -266,7 +267,7 @@ class BugWorld(): #defines the world, holds the objects, defines the rules of in
 
 #--- Instance Methods	
 	def __init__(Self):
-		Self.rel_position = BugWorld.IDENTITY #sets the world as the root equates to x=0, y=0, z=0, rotation = 0
+		Self.rel_position = BugWorld.MAP_TO_CANVAS #maps Bug World coords to the canvas coords in Pygame
 		for i in range(0, BugWorld.NUM_HERBIVORE_BUGS): #instantiate all of the Herbivores with a default name
 			start_pos = BugWorld.get_random_location_in_world()
 			Self.WorldObjects.append( Herbivore( start_pos, "H"+ str(i) ))
@@ -276,20 +277,20 @@ class BugWorld(): #defines the world, holds the objects, defines the rules of in
 			Self.WorldObjects.append( Carnivore( start_pos, "C"+ str(i) ))
 
 		for i in range(0, BugWorld.NUM_OMNIVORE_BUGS ):
- 			start_pos = BugWorld.get_random_location_in_world()
- 			Self.WorldObjects.append( Omnivore( start_pos, "O"+ str(i) ))
+			start_pos = BugWorld.get_random_location_in_world()
+			Self.WorldObjects.append( Omnivore( start_pos, "O"+ str(i) ))
 
 		for i in range(0, BugWorld.NUM_OBSTACLES ):
- 			start_pos = BugWorld.get_random_location_in_world()
- 			Self.WorldObjects.append( Obstacle( start_pos, "B"+ str(i) ))
+			start_pos = BugWorld.get_random_location_in_world()
+			Self.WorldObjects.append( Obstacle( start_pos, "B"+ str(i) ))
 
 		for i in range(0, BugWorld.NUM_PLANT_FOOD ):
- 			start_pos = BugWorld.get_random_location_in_world()
- 			Self.WorldObjects.append( Plant( start_pos, "P"+ str(i) ))
+			start_pos = BugWorld.get_random_location_in_world()
+			Self.WorldObjects.append( Plant( start_pos, "P"+ str(i) ))
 
 		for i in range(0, BugWorld.NUM_MEAT_FOOD ):
- 			start_pos = BugWorld.get_random_location_in_world()
- 			Self.WorldObjects.append( Meat( start_pos, "M"+ str(i) ))
+			start_pos = BugWorld.get_random_location_in_world()
+			Self.WorldObjects.append( Meat( start_pos, "M"+ str(i) ))
 
 	def update(Self):
 		for BWO in Self.WorldObjects:
@@ -326,9 +327,9 @@ class BugWorld(): #defines the world, holds the objects, defines the rules of in
 
 				#if it is a bug, then convert it to meat
 				if( co.type in { BWOType.HERB, BWOType.OMN, BWOType.CARN } ):
-			   		start_pos = co.get_abs_position() #get location of the dead bug
-			   		Self.WorldObjects.append( Meat( start_pos, "M"+ str(i) )) #create a meat object at same location
-			   		#list length hasn't changed because we are going to delete and add one
+					start_pos = co.get_abs_position() #get location of the dead bug
+					Self.WorldObjects.append( Meat( start_pos, "M"+ str(i) )) #create a meat object at same location
+					#list length hasn't changed because we are going to delete and add one
 				else:
 					list_len -= 1	#reduce the length of the list 
 
@@ -427,7 +428,7 @@ class BWObject( PGObject ): #Bug World Object
 
 
 	def __repr__(Self):
-  		return ( Self.name + ": abs position={}".format(Self.abs_position) ) #print its name and transform
+		return ( Self.name + ": abs position={}".format(Self.abs_position) ) #print its name and transform
 
 	def set_rel_position(Self, pos_transform = BugWorld.IDENTITY): # position relative to its container
 		Self.rel_position = BugWorld.adjust_for_boundary( pos_transform ) #class method handles boundary adjustment
@@ -452,7 +453,6 @@ class BWObject( PGObject ): #Bug World Object
 
 #Things to do
 #import logging
-#fix z axis flip from pygame to local coord system
 #have a scale for drawing in pygame that is independent of bug kinematics
 
 
@@ -473,11 +473,22 @@ class BWObject( PGObject ): #Bug World Object
 #has a brain
 #has sensors
 #has outputs
-
 #Bug parts
 #has a shape, size, color, location(relative to base), hitbox(relative to location)
 #knows how to draw itself
 #knows what type of collisions to register for
+
+class BugEyeHitbox( BWObject ):
+	def __init__(Self, pos_transform=BugWorld.IDENTITY, size=15):
+		Self.name = "EHB"
+		#position should be center of eye + radius of hitbox
+		super().__init__(pos_transform, Self.name)
+		Self.size = size
+		Self.color = Color.GREY
+
+	def update(Self, base):
+		# eyes don't move independent of bug, so relative pos won't change.
+		Self.set_abs_position(base)  # update it based on the passed in ref frame
 
 
 class BugEye( BWObject ):
@@ -485,11 +496,23 @@ class BugEye( BWObject ):
 		Self.name = "E"
 		super().__init__( pos_transform, Self.name )
 		Self.size = size
-		Self.color = Color.GREY 
+		Self.color = Color.BLACK
+		Self.HITBOX_SIZE = Self.size * 5
+
+		#add the eye hitbox for the current eye
+		#put hitbox so tangent with eye center...actually add 1 so avoid collision with bug just for efficiency
+		Self.HITBOX_LOC = BugWorld.get_pos_transform( (Self.HITBOX_SIZE+1), 0, 0, 0 )
+		Self.hitbox = BugEyeHitbox(Self.HITBOX_LOC, Self.HITBOX_SIZE )
 
 	def update( Self, base ):
 		#eyes don't move independent of bug, so relative pos won't change.
 		Self.set_abs_position( base ) #update it based on the passed in ref frame
+		Self.hitbox.update(Self.abs_position)
+
+	def draw( Self, surface ):
+		super().draw(surface) #inherited from BWObject
+		Self.hitbox.draw(surface, 1)
+
 
 class Bug ( BWObject ):
 
