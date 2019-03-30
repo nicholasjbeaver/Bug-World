@@ -35,57 +35,57 @@ class CollisionObject():
 		HITBOX_CIRCLE = int(1)
 		HITBOX_RECT	= int(2)
 
-	def __init__( Self ):
-		Self.set_hitbox_type( Self )
+	def __init__(self):
+		self.set_hitbox_type()
 		#must be added too in sublass so that if an object inherits this, it MUST know to add itself to a Collisions list.
 
-	def get_abs_x(Self):
+	def get_abs_x():
 		#must override
 		pass
 
-	def get_abs_y(Self):
+	def get_abs_y():
 		#must override
 		pass
 
-	def get_size(Self):
+	def get_size(self):
 		#must override and return radius
 		pass
 
-	def get_hitbox_type( Self ):
-		return Self.hitbox_type
+	def get_hitbox_type(self):
+		return self.hitbox_type
 
+	def set_hitbox_type(self):
+		self.hitbox_type = self.HitBoxType.HITBOX_CIRCLE
 
-	def set_hitbox_type( Self ):
-		Self.hitbox_type = Self.HitBoxType.HITBOX_CIRCLE
-
-	def is_this_me( Self, co ):
+	def is_this_me(self, co):
 		#check to see if the object to compare is itself or recursively its owner
 #TODO - add recursion for the container.  E.g., bug contains eyes.  Eyes contain a hitbox.
-		if( Self == co ): return True
+		if(self == co): return True
 		else: return False
 
-class Collisions():
 
-	def __init__( Self, handler_method ):
-		Self._emitters = []
-		Self._detectors = []
-		Self._enabled = False # can be used to ignore a certain type of collisions
-		Self._cb = handler_method
+class Collisions:
 
-	def __repr__( Self ):
-		return( 'Emitters(' + str(len( Self._emitters )) + '): ' + ' '.join(map(str, Self._emitters )) + '\n' + 'Detectors: ' + ' '.join(map(str, Self._detectors))) 
+	def __init__(self, handler_method):
+		self._emitters = []
+		self._detectors = []
+		self._enabled = False # can be used to ignore a certain type of collisions
+		self._cb = handler_method
 
-	def enable_collsions( Self ):
-		Self._enabled = True
+	def __repr__(self):
+		return( 'Emitters(' + str(len(self._emitters)) + '): ' + ' '.join(map(str, self._emitters )) + '\n' + 'Detectors: ' + ' '.join(map(str, self._detectors)))
 
-	def disable_collisions( Self ):
-		Self._enabled = False
+	def enable_collisions(self):
+		self._enabled = True
 
-	def add_emitter(Self, collision_object ):
-		Self._emitters.append( collision_object )
+	def disable_collisions(self):
+		self._enabled = False
 
-	def add_detector(Self, collision_object ):
-		Self._detectors.append( collision_object )
+	def add_emitter(self, collision_object):
+		self._emitters.append(collision_object)
+
+	def add_detector(self, collision_object):
+		self._detectors.append(collision_object)
 
 	def del_emitter(Self, collision_object ):
 #TODO - since objects will be removed occasionally, can iterate through for each one.  Assume there isn't mass deletion because then it would be better to 
@@ -94,37 +94,34 @@ class Collisions():
 		#should be called in the destructor method so that it is removed from all lists
 		#See article: https://stackoverflow.com/questions/1207406/how-to-remove-items-from-a-list-while-iterating
 		#somelist[:] = [x for x in somelist if not determine(x)]
-		Self._emitters[:] = [co for co in Self._emitters if not co==collision_object]
+		Self._emitters[:] = [co for co in Self._emitters if not co == collision_object]
 
+	def del_detector(self, collision_object):
+		self._detectors[:] = [co for co in self._detectors if not co == collision_object]
 
-	def del_detector(Self, collision_object ):
-		Self._detectors[:] = [co for co in Self._detectors if not co==collision_object]
-		pass	
+	def print_collision(ob1, ob2):
+		print(ob1.name + ', ' + ob2.name)
 
-	def print_collision( OB1, OB2 ):
-		print( OB1.name + ', ' + OB2.name  )
-		pass
+	def circle_collision(self, co1, co2):	#takes two Circle Hitbox Objects in.
+		dx = co1.get_abs_x() - co2.get_abs_x()
+		dy = co1.get_abs_y() - co2.get_abs_y()
 
-	def circle_collision( Self, CO1, CO2 ):	#takes two Circle Hitbox Objects in.
-		dx = CO1.get_abs_x() - CO2.get_abs_x()
-		dy = CO1.get_abs_y() - CO2.get_abs_y()
-
-		dist_sqrd = ( dx * dx ) + ( dy * dy )
+		dist_sqrd = (dx * dx) + (dy * dy)
 		#size is radius of objections circle hit box
-		if (dist_sqrd < (CO1.get_size() + CO2.get_size())**2) : return True
+		if (dist_sqrd < (co1.get_size() + co2.get_size())**2): return True
 		else: return False
 
-	def detect_collisions( Self ):
+	def detect_collisions(self):
 		#loop through solid bodies
 		#call collision handlers on each object
-		for CO1 in Self._detectors:
-			for CO2 in Self._emitters:
-				if CO1.is_this_me( CO2 ): continue #make sure the object is not part of the bug that owns it
-				elif Self.circle_collision(CO1, CO2): #replace with hitbox stuff
-					print("Emitter " + CO1.name + " detected " + CO2.name )
+		for co1 in self._detectors:
+			for co2 in self._emitters:
+				if co1.is_this_me( co2 ): continue #make sure the object is not part of the bug that owns it
+				elif self.circle_collision(co1, co2): #replace with hitbox stuff
+					print("Emitter " + co1.name + " detected " + co2.name )
 
 					#call the callback handler
-					Self._cb(CO1,CO2)
+					self._cb(co1, co2)
 
 
 
