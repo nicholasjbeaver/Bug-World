@@ -10,19 +10,19 @@ import pygame
 class PGObject():
 	color = (0, 0, 0)  # default, must be overwritten
 	size = 1  # default, must be overwritten
+
 	def draw(self, surface, fill=0): #fill = 0 means solid, = 1 means outline only
 		x = int(self.get_abs_x())
 		y = int(self.get_abs_y())
+		r, g, b = self.color #unpack the tuple
 
-
-		r,g,b = self.color #unpack the tuple
-#modulate color based on health
+#TODO modulate color based on health
 		# hp = Self.health/100 #what is the health percentage
 		# r *= hp
 		# g *= hp
 		# b *= hp
 
-		pygame.draw.circle(surface, (int(r),int(g),int(b)), (x, y), self.size, fill)
+		pygame.draw.circle(surface, (int(r), int(g), int(b)), (x, y), self.size, fill)
 	
 	def get_abs_x(self):  # must be overwritten
 		return 0
@@ -116,7 +116,8 @@ class Color(): #RGB values
 	GREY = (190, 190, 190)
 
 
-class BWOType():
+class BWOType:
+	''' Defines the different types of objects allowed within a Bug World '''
 
 	# use integers so it is faster for dict lookups
 	BUG = int(1)
