@@ -122,10 +122,11 @@ class CollisionGroup:
 		#call collision handlers on each object
 		for co1 in self._detectors:
 			for co2 in self._emitters:
-				if co1.ci.is_this_me(co2):
+#TODO FIX THIS				if co1.ci.is_this_me(co2):
+				if co1 == co2:
 					continue #make sure the object is not part of the bug that owns it
 				elif self.circle_collision(co1, co2):
-					print("Detector: " + co1.name + " detected Emitter:" + co2.name )
+#					print("Detector: " + co1.name + " detected Emitter:" + co2.name )
 					self._cb(co1, co2) #call the callback handler
 
 
@@ -136,13 +137,12 @@ class CollisionMatrix:
 		self.collision_dictionary = collision_dictionary
 
 	def invoke_handler(self, detector, emitter):
-		self.print_collision(detector, emitter)
+#		self.print_collision(detector, emitter)
 		collision_data = self.extract_collision_data(detector, emitter)
 		try:
 			self.collision_dictionary[(detector.type, emitter.type)](detector, emitter)  # use types to lookup function to call and then call it
 		except KeyError:
 			print('No handler for: ' + detector.name + ' T:' + str(detector.type) + ", " + emitter.name + ' T:' + str(emitter.type))
-			exit()
 
 	def extract_collision_data(self, detector, emitter):
 		"""
