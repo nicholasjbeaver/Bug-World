@@ -4,7 +4,7 @@ Collision API
 
 	CollisionInterface() - objects that want to participate in collisions must implement one of these
 	CollisionGroup() - container for the list of objects that can collide.
-						There are two types: emitters and detectors.  Detectors only detect things in the emitters list.
+						There are two types of objects in a Group: emitters and detectors.  Detectors only detect things in the emitters list.
 	CollisionMatrix() - so can contain the dictionary and then the logic to invoke the methods.  Would also do error checking
 						allows the extraction of different types of collision data
 	Collisions() - contains all of the CollisionGroups and defines the different valid CollisionTypes
@@ -55,13 +55,13 @@ class CollisionInterface:
 		if self == co2:
 			return True
 		elif self.owner is not None:
-			return self.owner.is_this_me(co2)  #recursively call in case the comparision object is actually the owner.
+			return self.owner.ci.is_this_me(co2)  #recursively call in case the comparision object is actually the owner.
 		else:
 			return False
 
 
 class CollisionGroup:
-	"""A group is all of the emmitters and detectors for a particular sensor e.g., physical or visual"""
+	"""A group is all of the emmitters and detectors for a particular sensor (i.e., type) e.g., physical or visual"""
 
 	def __init__(self, handler_method):
 		""" handler_method is the method to call when a detector collides with an emitter """
@@ -122,8 +122,8 @@ class CollisionGroup:
 		#call collision handlers on each object
 		for co1 in self._detectors:
 			for co2 in self._emitters:
-#TODO fix this				if co1.is_this_me(co2): continue #make sure the object is not part of the bug that owns it
-				if False: continue
+				if co1.ci.is_this_me(co2):
+					continue #make sure the object is not part of the bug that owns it
 				elif self.circle_collision(co1, co2):
 					print("Detector: " + co1.name + " detected Emitter:" + co2.name )
 					self._cb(co1, co2) #call the callback handler
@@ -246,17 +246,17 @@ class CollisionTestObject: #simlar to BugWorldObject
 		self.collisions = collisions #handle back to container so can call instance methods on it.
 		self.owner = owner #for composite objects like eyes that are on the bug.  This would point to the bug
 
-	def __repr__( Self ):
-		return Self.name
+	def __repr__(self):
+		return self.name
 
-	def get_abs_x( Self ):
-		return Self.x
+	def get_abs_x(self):
+		return self.x
 
-	def get_abs_y( Self ):
-		return Self.y
+	def get_abs_y(self):
+		return self.y
 
-	def get_size( Self ):
-		return Self.size
+	def get_size(self):
+		return self.size
 
 	def kill(self):
 		self.ci.deregister_all()
@@ -325,11 +325,10 @@ class VisualCollisionMatrix(CollisionMatrix):
 	def bug_eye(self, bug, eye):
 		self.print_test_message(bug,eye)
 
-
 	def get_collision_dictionary(self):
 		cd = {  # look up which function to call when two objects of certain types collide
-			(CTOType.HERB, CTOType.EYE): self.bug_eye,
-			(CTOType.CARN, CTOType.EYE): self.bug_eye,
+			(CTOType.EYE,CTOType.HERB ): self.bug_eye,
+			(CTOType.EYE,CTOType.CARN ): self.bug_eye,
 		}
 		return cd
 
