@@ -1,6 +1,4 @@
 
-#to fix bad merge
-
 #PGBugWorld where pygame dependent code goes
 #contains draw code
 #toggle display of light, smell, sound
