@@ -44,7 +44,6 @@ class PGObject():
 #objects have hitboxes for each sensor.
 
 
-#objects emit light at 1/r^2 three different colors
 #how do you keep senses from sensing itself
 #objects emit sound (varies on speed)
 #objects emit smell
@@ -278,27 +277,27 @@ class BugWorld:  # defines the world, holds the objects, defines the rules of in
 		self.rel_position = BugWorld.MAP_TO_CANVAS #maps Bug World coords to the canvas coords in Pygame
 		for i in range(0, BugWorld.NUM_HERBIVORE_BUGS): #instantiate all of the Herbivores with a default name
 			start_pos = BugWorld.get_random_location_in_world(self)
-			self.WorldObjects.append(Herbivore(self.collisions, None, start_pos, "H" + str(i)))
+			self.WorldObjects.append(Herbivore(self.collisions, start_pos, "H" + str(i)))
 
 		for i in range(0, BugWorld.NUM_CARNIVORE_BUGS):
 			start_pos = BugWorld.get_random_location_in_world(self)
-			self.WorldObjects.append(Carnivore(self.collisions, None, start_pos, "C" + str(i)))
+			self.WorldObjects.append(Carnivore(self.collisions, start_pos, "C" + str(i)))
 
 		for i in range(0, BugWorld.NUM_OMNIVORE_BUGS):
 			start_pos = BugWorld.get_random_location_in_world(self)
-			self.WorldObjects.append(Omnivore(self.collisions, None, start_pos, "O" + str(i)))
+			self.WorldObjects.append(Omnivore(self.collisions, start_pos, "O" + str(i)))
 
 		for i in range(0, BugWorld.NUM_OBSTACLES):
 			start_pos = BugWorld.get_random_location_in_world(self)
-			self.WorldObjects.append(Obstacle(self.collisions, None, start_pos, "B" + str(i)))
+			self.WorldObjects.append(Obstacle(self.collisions, start_pos, "B" + str(i)))
 
 		for i in range(0, BugWorld.NUM_PLANT_FOOD ):
 			start_pos = BugWorld.get_random_location_in_world(self)
-			self.WorldObjects.append(Plant(self.collisions, None, start_pos, "P" + str(i)))
+			self.WorldObjects.append(Plant(self.collisions, start_pos, "P" + str(i)))
 
 		for i in range(0, BugWorld.NUM_MEAT_FOOD):
 			start_pos = BugWorld.get_random_location_in_world(self)
-			self.WorldObjects.append(Meat(self.collisions, None, start_pos, "M" + str(i)))
+			self.WorldObjects.append(Meat(self.collisions, start_pos, "M" + str(i)))
 
 	def update(self):
 		for BWO in self.WorldObjects:
@@ -329,7 +328,7 @@ class BugWorld:  # defines the world, holds the objects, defines the rules of in
 				# if it is a bug, then convert it to meat
 				if( co.type in { BWOType.HERB, BWOType.OMN, BWOType.CARN } ):
 					start_pos = co.get_abs_position() #get location of the dead bug
-					self.WorldObjects.append(Meat(self.collisions, None, start_pos, "M"+ str(i) )) #create a meat object at same location
+					self.WorldObjects.append(Meat(self.collisions, start_pos, "M"+ str(i) )) #create a meat object at same location
 					#list length hasn't changed because we are going to delete and add one
 				else:
 					list_len -= 1	#reduce the length of the list 
@@ -391,7 +390,7 @@ class BWObject(PGObject):  # Bug World Object
 	#BWO's should have a draw method that includes itself, hitboxes (based on global var)
 	#stub methods for what collisions to register for
 
-	def __init__(self, starting_pos = BugWorld.IDENTITY, name ="BWOBject"):
+	def __init__(self, starting_pos=BugWorld.IDENTITY, name="BWOBject"):
 		self.rel_position = starting_pos
 		self.abs_position = starting_pos
 		self.name = name
@@ -495,13 +494,13 @@ class Bug(BWObject):
 	DEFAULT_TURN_AMT = np.deg2rad(30) # turns are in radians
 	DEFAULT_MOVE_AMT = 5
 
-	def __init__(self, collisions, owner, initial_pos, name ="Bug"):
+	def __init__(self, collisions, initial_pos, name ="Bug"):
 		super().__init__(initial_pos, name)
 		self.size = 10  # override default and set the intial radius of bug
 		self.color = Color.PINK  # override default and set the initial color of a default bug
 		self.energy = 100  # default...needs to be overridden
 		self.score = 0  # used to reinforce behaviour.  Add to the score when does a "good" thing
-		self.ci = CollisionInterface(collisions, owner)
+		self.ci = CollisionInterface(collisions, self)
 		self.ci.register_as_emitter(self, 'physical')
 		self.ci.register_as_detector(self, 'physical')
 
@@ -575,52 +574,52 @@ class Bug(BWObject):
 
 
 class Herbivore(Bug):
-	def __init__ (self, collisions, owner, starting_pos, name="HERB"):
-		super().__init__(collisions, owner, starting_pos, name )
+	def __init__ (self, collisions, starting_pos, name="HERB"):
+		super().__init__(collisions, starting_pos, name )
 		self.color = Color.GREEN
 		self.type = BWOType.HERB
 
 
 class Omnivore(Bug):
-	def __init__(self, collisions, owner, starting_pos, name="OMN"):
-		super().__init__(collisions, owner,starting_pos, name )
+	def __init__(self, collisions, starting_pos, name="OMN"):
+		super().__init__(collisions, starting_pos, name )
 		self.color = Color.ORANGE
 		self.type = BWOType.OMN
 
 
 class Carnivore(Bug):
-	def __init__(self, collisions, owner, starting_pos, name="CARN"):
-		super().__init__(collisions, owner, starting_pos, name )
+	def __init__(self, collisions, starting_pos, name="CARN"):
+		super().__init__(collisions, starting_pos, name )
 		self.color = Color.RED
 		self.type = BWOType.CARN
 
 
 class Obstacle(BWObject):
-	def __init__ (self, collisions, owner, starting_pos, name="OBST"):
+	def __init__ (self, collisions, starting_pos, name="OBST"):
 		super().__init__(starting_pos, name )
 		self.color = Color.YELLOW
 		self.type = BWOType.OBST
 		self.size = 7
-		self.ci = CollisionInterface(collisions, owner)
+		self.ci = CollisionInterface(collisions, self)
 		self.ci.register_as_emitter(self, 'physical')
 
 
 class Meat(BWObject):
-	def __init__ (self, collisions, owner, starting_pos, name ="MEAT"):
+	def __init__ (self, collisions, starting_pos, name ="MEAT"):
 		super().__init__(starting_pos, name )
 		self.color = Color.BROWN
 		self.type = BWOType.MEAT
 		self.size = 10
-		self.ci = CollisionInterface(collisions, owner)
+		self.ci = CollisionInterface(collisions, self)
 		self.ci.register_as_emitter(self, 'physical')
 
 class Plant(BWObject):
-	def __init__(self, collisions, owner, starting_pos, name="PLANT"):
+	def __init__(self, collisions, starting_pos, name="PLANT"):
 		super().__init__(starting_pos, name )
 		self.color = Color.DARK_GREEN
 		self.type = BWOType.PLANT
 		self.size = 5
-		self.ci = CollisionInterface(collisions, owner)
+		self.ci = CollisionInterface(collisions, self)
 		self.ci.register_as_emitter(self, 'physical')
 
 

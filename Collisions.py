@@ -26,7 +26,7 @@ class CollisionInterface:
 	def __init__(self, collisions, owner):
 		self.collisions = collisions  #the container for all collisions
 		self.collision_registration_list = []  # this holds all of the registrations an object has registered for
-		self.owner = owner  # this is if this object is contained within another object for recursive collision ignore
+		self.owner = owner  # This is the ultimate owner of all of the sub-components...very top of hierarchy
 
 	def register_as_emitter(self, collision_object, collision_type):
 		if collision_type not in self.collisions.valid_types:
@@ -52,10 +52,8 @@ class CollisionInterface:
 				self.collisions.deregister_detector(collision_object, collision_type)
 
 	def is_this_me(self, co2):
-		if self == co2:
+		if self.owner == co2:
 			return True
-		elif self.owner is not None:
-			return self.owner.ci.is_this_me(co2)  #recursively call in case the comparision object is actually the owner.
 		else:
 			return False
 
@@ -122,8 +120,7 @@ class CollisionGroup:
 		#call collision handlers on each object
 		for co1 in self._detectors:
 			for co2 in self._emitters:
-#TODO FIX THIS				if co1.ci.is_this_me(co2):
-				if co1 == co2:
+				if co1.ci.is_this_me(co2):
 					continue #make sure the object is not part of the bug that owns it
 				elif self.circle_collision(co1, co2):
 #					print("Detector: " + co1.name + " detected Emitter:" + co2.name )
@@ -234,17 +231,13 @@ class CTOType:  #similar to BugWorldTypes
 
 class CollisionTestObject: #simlar to BugWorldObject
 
-	def __init__(self, collisions, owner, name, x, y, size):
+	def __init__(self, collisions, name, x, y, size):
 		self.type = CTOType.OBJ #needs to be overwritten
 		self.name = name
 		self.x = x
 		self.y = y
 		self.size = size
-		self.ci = CollisionInterface(collisions, owner)
-
-		# things specific to collisions
-		self.collisions = collisions #handle back to container so can call instance methods on it.
-		self.owner = owner #for composite objects like eyes that are on the bug.  This would point to the bug
+		self.ci = CollisionInterface(collisions, self)
 
 	def __repr__(self):
 		return self.name
@@ -268,8 +261,8 @@ class CollisionTestObject: #simlar to BugWorldObject
 
 class CollisionTestBody(CollisionTestObject):
 
-	def __init__(self, collisions, owner, name, test_type, x, y, size):
-		super().__init__(collisions, owner, name, x, y, size)
+	def __init__(self, collisions, name, test_type, x, y, size):
+		super().__init__(collisions, name, x, y, size)
 		self.type = test_type
 
 		self.ci.register_as_emitter(self, 'visual')
@@ -279,8 +272,9 @@ class CollisionTestBody(CollisionTestObject):
 
 class CollisionTestEye(CollisionTestObject):
 	def __init__(self, collisions, owner, name, x, y, size):
-		super().__init__(collisions, owner, name, x, y, size)
+		super().__init__(collisions, name, x, y, size)
 		self.type = CTOType.EYE
+		self.ci.owner = owner
 		self.ci.register_as_detector(self, 'visual')
 
 
@@ -354,7 +348,7 @@ class CollisionTestWorld():  # Similar to BugWorld
 		for pos in locs:
 			ctr += 1
 			name = "body" + str(ctr)
-			self.Bodies.append(CollisionTestBody(self.collisions, None, name, *pos))
+			self.Bodies.append(CollisionTestBody(self.collisions, name, *pos))
 
 	def add_eyes(self):
 		#x, y, size 
