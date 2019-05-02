@@ -1,141 +1,222 @@
 
-'''
+"""
 Collision API
-	Collisions() - container for the list of objects.  There are two types: emitters and detectors.  Detectors only detect things in the emitters list.
-	CollisionObject() - necessary parent class to participate in the API
+
+	CollisionInterface() - objects that want to participate in collisions must implement one of these
+	CollisionGroup() - container for the list of objects that can collide.
+						There are two types of objects in a Group: emitters and detectors.  Detectors only detect things in the emitters list.
+	CollisionMatrix() - so can contain the dictionary and then the logic to invoke the methods.  Would also do error checking
+						allows the extraction of different types of collision data
+	Collisions() - contains all of the CollisionGroups and defines the different valid CollisionTypes
 
 	Usage:
-		1) Create a Collisions object (CO)
+		1) Create an interface object on the object that is to participate (CO)
 		2) The CO is responsible for know what collisions it needs to register for
 		3) The CO must have a pointer to its container.  This allows a recursive search to make sure it isn't "colliding" with itself
 		4) The CO must have a callback method to call when they do collide with something
 		5) The CO shouldn't asked to be removed from the lists when it is marked from deletion.
 
-	Definitions:
-		1) Hitbox is the object that gets detected.  Sometimes the hitbox is the object.  Other times, the hitbox is a child
-		   off of the object because it is offset from the object
-		2) Hitbox type will be used to use circles, bounding boxes etc.  Would like to do a cone for eyesight to get directionality
-		3) Maybe do a 1-d ray trace?
+"""
+
+class CollisionInterface:
+	"""Encapsulates everything an object needs to participate in collisions"""
+	_emitter = 'emitter'
+	_detector = 'detector'
+
+	def __init__(self, collisions, owner):
+		self.collisions = collisions  #the container for all collisions
+		self.collision_registration_list = []  # this holds all of the registrations an object has registered for
+		self.owner = owner  # This is the ultimate owner of all of the sub-components...very top of hierarchy
+
+	def register_as_emitter(self, collision_object, collision_type):
+		if collision_type not in self.collisions.valid_types:
+			print("Unsupported collision type: ", collision_type)
+			return
+		else:
+			self.collisions.register_emitter(collision_object, collision_type)
+			self.collision_registration_list.append((collision_object, collision_type, self._emitter))
+
+	def register_as_detector(self, collision_object, collision_type):
+		if collision_type not in self.collisions.valid_types:
+			print("Unsupported collision type: ", collision_type)
+			return
+		else:
+			self.collisions.register_detector(collision_object, collision_type)
+			self.collision_registration_list.append((collision_object, collision_type, self._detector))
+
+	def deregister_all(self):
+		for collision_object, collision_type, emitter_or_detector in self.collision_registration_list:
+			if emitter_or_detector == self._emitter:
+				self.collisions.deregister_emitter(collision_object, collision_type)
+			else:
+				self.collisions.deregister_detector(collision_object, collision_type)
+
+	def is_this_me(self, co2):
+		if self.owner == co2:
+			return True
+		else:
+			return False
 
 
-'''
+class CollisionGroup:
+	"""A group is all of the emmitters and detectors for a particular sensor (i.e., type) e.g., physical or visual"""
 
-#Use transforms to represent absolute position, that way always know regardless of env
+	def __init__(self, handler_method):
+		""" handler_method is the method to call when a detector collides with an emitter """
+		self._emitters = []
+		self._detectors = []
+		self._enabled = True  # can be used to ignore a certain type of collisions
+		self._cb = handler_method
 
+	def __repr__(self):
+		return 'Emitters(' + str(len(self._emitters)) + '): ' + ' '.join(map(str, self._emitters )) + '\n' + 'Detectors: ' + ' '.join(map(str, self._detectors))
 
-'''
-	Class: CollisionObject
-		- Is a base class
+	def enable_collisions(self):
+		""" Sets a state such that the collisions of this group will be checked """
+		self._enabled = True
 
-'''
+	def disable_collisions(self):
+		""" Sets a state such that the collisions of this group will be checked """
+		self._enabled = False
 
-class CollisionObject():
+	def set_handler(self, handler):
+		self._cb = handler
 
-	class HitBoxType():
-		HITBOX_CIRCLE = int(1)
-		HITBOX_RECT	= int(2)
+	def add_emitter(self, collision_object):
+		self._emitters.append(collision_object)
 
-	def __init__( Self ):
-		Self.set_hitbox_type( Self )
-		#must be added too in sublass so that if an object inherits this, it MUST know to add itself to a Collisions list.
+	def add_detector(self, collision_object):
+		self._detectors.append(collision_object)
 
-	def get_abs_x(Self):
-		#must override
-		pass
-
-	def get_abs_y(Self):
-		#must override
-		pass
-
-	def get_size(Self):
-		#must override and return radius
-		pass
-
-	def get_hitbox_type( Self ):
-		return Self.hitbox_type
-
-
-	def set_hitbox_type( Self ):
-		Self.hitbox_type = Self.HitBoxType.HITBOX_CIRCLE
-
-	def is_this_me( Self, co ):
-		#check to see if the object to compare is itself or recursively its owner
-#TODO - add recursion for the container.  E.g., bug contains eyes.  Eyes contain a hitbox.
-		if( Self == co ): return True
-		else: return False
-
-class Collisions():
-
-	def __init__( Self, handler_method ):
-		Self._emitters = []
-		Self._detectors = []
-		Self._enabled = False # can be used to ignore a certain type of collisions
-		Self._cb = handler_method
-
-	def __repr__( Self ):
-		return( 'Emitters(' + str(len( Self._emitters )) + '): ' + ' '.join(map(str, Self._emitters )) + '\n' + 'Detectors: ' + ' '.join(map(str, Self._detectors))) 
-
-	def enable_collsions( Self ):
-		Self._enabled = True
-
-	def disable_collisions( Self ):
-		Self._enabled = False
-
-	def add_emitter(Self, collision_object ):
-		Self._emitters.append( collision_object )
-
-	def add_detector(Self, collision_object ):
-		Self._detectors.append( collision_object )
-
-	def del_emitter(Self, collision_object ):
-#TODO - since objects will be removed occasionally, can iterate through for each one.  Assume there isn't mass deletion because then it would be better to 
-#		mark for deletion and then process whole list
+	def del_emitter(self, collision_object):
 		#find object in list and remove it
 		#should be called in the destructor method so that it is removed from all lists
 		#See article: https://stackoverflow.com/questions/1207406/how-to-remove-items-from-a-list-while-iterating
 		#somelist[:] = [x for x in somelist if not determine(x)]
-		Self._emitters[:] = [co for co in Self._emitters if not co==collision_object]
+		self._emitters[:] = [co for co in self._emitters if not co == collision_object]
 
+	def del_detector(self, collision_object):
+		self._detectors[:] = [co for co in self._detectors if not co == collision_object]
 
-	def del_detector(Self, collision_object ):
-		Self._detectors[:] = [co for co in Self._detectors if not co==collision_object]
-		pass	
+	def circle_collision(self, co1, co2):
+		"""takes two objects presumed to have a center and a size circle."""
 
-	def print_collision( OB1, OB2 ):
-		print( OB1.name + ', ' + OB2.name  )
-		pass
+		dx = co1.get_abs_x() - co2.get_abs_x()
+		dy = co1.get_abs_y() - co2.get_abs_y()
 
-	def circle_collision( Self, CO1, CO2 ):	#takes two Circle Hitbox Objects in.
-		dx = CO1.get_abs_x() - CO2.get_abs_x()
-		dy = CO1.get_abs_y() - CO2.get_abs_y()
+		dist_sqrd = (dx * dx) + (dy * dy)
 
-		dist_sqrd = ( dx * dx ) + ( dy * dy )
-		#size is radius of objections circle hit box
-		if (dist_sqrd < (CO1.get_size() + CO2.get_size())**2) : return True
-		else: return False
+		#size is assummed to be the radius of object's circular hit box
+		if dist_sqrd < (co1.get_size() + co2.get_size())**2:
+			return True
+		else:
+			return False
 
-	def detect_collisions( Self ):
+	def detect_collisions(self):
+		if not self._enabled:
+			return
+
 		#loop through solid bodies
 		#call collision handlers on each object
-		for CO1 in Self._detectors:
-			for CO2 in Self._emitters:
-				if CO1.is_this_me( CO2 ): continue #make sure the object is not part of the bug that owns it
-				elif Self.circle_collision(CO1, CO2): #replace with hitbox stuff
-					print("Emitter " + CO1.name + " detected " + CO2.name )
-
-					#call the callback handler
-					Self._cb(CO1,CO2)
-
+		for co1 in self._detectors:
+			for co2 in self._emitters:
+				if co1.ci.is_this_me(co2):
+					continue #make sure the object is not part of the bug that owns it
+				elif self.circle_collision(co1, co2):
+#					print("Detector: " + co1.name + " detected Emitter:" + co2.name )
+					self._cb(co1, co2) #call the callback handler
 
 
-#--- Testing Code after this point -------------------------------------------------------------------------------------------------------------
+class CollisionMatrix:
+	"""This class encapsulates what happens between two objects once the collision is detected"""
+
+	def __init__(self, collision_dictionary):
+		self.collision_dictionary = collision_dictionary
+
+	def invoke_handler(self, detector, emitter):
+#		self.print_collision(detector, emitter)
+		collision_data = self.extract_collision_data(detector, emitter)
+		try:
+			self.collision_dictionary[(detector.type, emitter.type)](detector, emitter)  # use types to lookup function to call and then call it
+		except KeyError:
+			print('No handler for: ' + detector.name + ' T:' + str(detector.type) + ", " + emitter.name + ' T:' + str(emitter.type))
+
+	def extract_collision_data(self, detector, emitter):
+		"""
+			can be overwritten so that different collisions can return different data.
+			expected return is a dictionary of name-value pairs
+			by default it returns a dictionary containing the distance between the two objects squared
+			leaving as an instance method in case there is a subclass instance variable that needs to be accessed
+		"""
+		dx = detector.get_abs_x() - emitter.get_abs_x()
+		dy = detector.get_abs_y() - emitter.get_abs_y()
+		dist_sqrd = (dx * dx) + (dy * dy)
+		return  {'dist_sqrd':dist_sqrd}
+
+	def print_collision(self, OB1, OB2):
+		print(OB1.name + ' T:' + str(OB1.type) + ", " + OB2.name + ' T:' + str(OB2.type))
+
+
+class Collisions:
+	"""This contains all of the collision groups, detection between objects"""
+	valid_types = ["physical", "visual"] #"sound, smell, communication, click
+	collision_groups = {}
+
+	def default_handler(self):  # this should only be called if no handler is set for a collision group.
+		print("Error, no handler set for the group.  Need to instantiate a CollisionMatrix and assign handler")
+
+	def __init__(self):
+		#for each type, create a group
+		#add the group to the dictionary
+		for collision_type in Collisions.valid_types:
+			self.collision_groups[collision_type] = CollisionGroup(self.default_handler)  #add a collision group
+
+	def lookup_group(self, collision_type):
+		"""use to encapsulate error handling for groups that are found"""
+		try:
+			return self.collision_groups[collision_type]
+		except KeyError:
+			print("invalid collision type: ", collision_type)
+			exit()
+
+	def set_collision_handler(self, collision_type, handler):
+		"""this is used so a particular collision type can set the specific handler to set the collision data."""
+		group = self.lookup_group(collision_type)
+		group.set_handler(handler)
+
+	def register_emitter(self, collision_object, collision_type):
+		#look up in the dictionary to get correct group
+		#invoke add emitter on that group
+		group = self.lookup_group(collision_type)
+		group.add_emitter(collision_object)
+
+	def register_detector(self, collision_object, collision_type):
+		group = self.lookup_group(collision_type)
+		group.add_detector(collision_object)
+
+	def deregister_emitter(self, collision_object, collision_type):
+		group = self.lookup_group(collision_type)
+		group.del_emitter(collision_object)
+
+	def deregister_detector(self, collision_object, collision_type):
+		group = self.lookup_group(collision_type)
+		group.del_emitter(collision_object)
+
+	def detect_collisions(self):
+		#loop through all of the groups and check for collisions
+		for collision_type, collision_group in self.collision_groups.items():
+			collision_group.detect_collisions()
+
+
+# --- Testing Code after this point --------------------------------------------------------------------------------
 
 '''
-	For an object to participate in Collision Detection it must inherit from the Collisions.CollisionObject class
-	and must override the methods needed during collision detection
+	For an object to participate in must implement the CollisionsInterface
+	For the world to process collisions, a Collisions object must be created
+	For each type of collision, define a collision matrix that determines what methods to call and contains implementaions
 '''
 
-class CTOType():
+class CTOType:  #similar to BugWorldTypes
 	#use integers so it is faster for dict lookups
 	OBJ = int(1)  #catch all for the base class.  Shouldn't ever show up
 	BUG = int(2)  #handles any bug interaction
@@ -147,196 +228,129 @@ class CTOType():
 	PLANT = int(8)# Food for Herbivore and Omnivore
 	EYE = int(9)  # An eye that used for visual detection	
 
-class CollisionTestObject( CollisionObject ):
 
-	def __init__( Self, CollisionTestWorld, Owner, name, x, y, size ):
-		Self.type = CTOType.OBJ #needs to be overwritten
-		Self.name = name
-		Self.x = x
-		Self.y = y
-		Self.size = size
-		Self.World = CollisionTestWorld #handle back to container so can call instance methods on it.
-		Self.Owner = Owner #for composite objects like eyes that are on the bug.  This would point to the bug
+class CollisionTestObject: #simlar to BugWorldObject
 
-	def __repr__( Self ):
-		return Self.name
+	def __init__(self, collisions, name, x, y, size):
+		self.type = CTOType.OBJ #needs to be overwritten
+		self.name = name
+		self.x = x
+		self.y = y
+		self.size = size
+		self.ci = CollisionInterface(collisions, self)
 
-	def get_abs_x( Self ):
-		return Self.x
+	def __repr__(self):
+		return self.name
 
-	def get_abs_y( Self ):
-		return Self.y
+	def get_abs_x(self):
+		return self.x
 
-	def get_size( Self ):
-		return Self.size
+	def get_abs_y(self):
+		return self.y
 
-	def is_this_me( Self, CO2 ):
-		if 	( Self == CO2 ): True
-		elif ( Self.Owner != None ):
-			return ( Self.Owner.is_this_me( CO2 ))  #recursively call in case the comparision object is actually the owner.
-		else:
-			return False
+	def get_size(self):
+		return self.size
 
-	def kill( Self ): #must override this method so that it is removed from all of the event lists
-		return
+	def kill(self):
+		self.ci.deregister_all()
+		print('About to die: ' + self.name)
 
-	def __del__( Self ):
-		print("Destructor Called " + Self.name )
+#	def __del__(self):
+#		print("Destructor Called " + self.name)
 
 
-class CollisionTestBody( CollisionTestObject ):
+class CollisionTestBody(CollisionTestObject):
 
-	def __init__( Self, CTW, Owner, name, type, x, y, size ):
-		super().__init__( CTW, Owner, name, x, y, size )
-		Self.type = type 
-		Self.World.register_collision_event( Self.World.CTWEventType.VISUAL_EMITTER, Self)
-		Self.World.register_collision_event( Self.World.CTWEventType.PHYSICAL_DETECTOR, Self )
-		Self.World.register_collision_event( Self.World.CTWEventType.PHYSICAL_EMITTER, Self )
+	def __init__(self, collisions, name, test_type, x, y, size):
+		super().__init__(collisions, name, x, y, size)
+		self.type = test_type
 
-	def kill( Self ):
-#TODO
-		#want to make sure it gets removed from all of the collision events
-		#since the world creates in different lists, it should remove it from all of them
-		#let's revisit though...probably should print a debug message here when something gets deleted at least
-		Self.World.deregister_collision_event( Self.World.CTWEventType.VISUAL_EMITTER, Self)
-		Self.World.deregister_collision_event( Self.World.CTWEventType.PHYSICAL_DETECTOR, Self )
-		Self.World.deregister_collision_event( Self.World.CTWEventType.PHYSICAL_EMITTER, Self )
-		print('About to die: ' + Self.name )
+		self.ci.register_as_emitter(self, 'visual')
+		self.ci.register_as_emitter(self, 'physical')
+		self.ci.register_as_detector(self, 'physical')
 
 
+class CollisionTestEye(CollisionTestObject):
+	def __init__(self, collisions, owner, name, x, y, size):
+		super().__init__(collisions, name, x, y, size)
+		self.type = CTOType.EYE
+		self.ci.owner = owner
+		self.ci.register_as_detector(self, 'visual')
 
 
+class PhysicalCollisionMatrix(CollisionMatrix):
 
-class CollisionTestEye( CollisionTestObject ):
-	def __init__( Self, CTW, Owner, name, x, y, size ):
-		super().__init__( CTW, Owner, name, x, y, size )
-		Self.type = CTOType.EYE 
-		Self.World.register_collision_event( Self.World.CTWEventType.VISUAL_DETECTOR, Self )
+	def __init__(self, collisions):
+		super().__init__(self.get_collision_dictionary())
+		self.collisions = collisions
+		self.collisions.set_collision_handler('physical', self.invoke_handler)
 
-	def kill( Self ):
-		Self.World.deregister_collision_event( Self.World.CTWEventType.VISUAL_DETECTOR, Self )
-		print('About to die: ' + Self.name )
+	def herb_carn(self, herb, carn):
+		self.print_test_message(herb,carn)
 
+	def carn_herb(self, carn, herb):
+		self.print_test_message(carn,herb)
 
-class CTWCollisionDict():
+	def herb_herb(self, herb1, herb2):
+		self.print_test_message(herb1,herb2)
 
-	def handle_collision( Self, detector, emitter ):
-		Self.handle_dict( detector, emitter ) #the dector detected the emitter
+	def carn_carn(self, carn1, carn2 ):
+		self.print_test_message(carn1,carn2)
 
-	def handle_dict( Self, OB1, OB2 ):
-		try:
-			Self.CollisionDict[(OB1.type,OB2.type)]( OB1, OB2 ) #use types to lookup function to call and then call it
-		except KeyError:
-			print('No handler for: ' + OB1.name + ' T:' + str(OB1.type)	+ ", " + OB2.name + ' T:' + str(OB2.type))
+	def get_collision_dictionary(self):
+		cd = { # look up which function to call when two objects of certain types collide
+			(CTOType.HERB, CTOType.CARN): self.herb_carn,
+			(CTOType.HERB, CTOType.HERB): self.herb_herb,
+			(CTOType.CARN, CTOType.CARN): self.carn_carn,
+			(CTOType.CARN, CTOType.HERB): self.carn_herb,
+			}
+		return cd
 
-	def print_collision( OB1, OB2 ):
-		print( OB1.name + ' T:' + str(OB1.type)	+ ", " + OB2.name + ' T:' + str(OB2.type) )
+	def print_test_message(self, obj1, obj2):
+		print("handling: ", obj1.name, " + ", obj2.name)
 
-	def herb_carn( herb, carn):
-		CTWCollisionDict.print_collision( herb, carn )
+class VisualCollisionMatrix(CollisionMatrix):
 
-	def carn_herb( carn, herb):
-		CTWCollisionDict.print_collision( carn, herb )
-	
-	def herb_herb( herb1, herb2 ):
-		CTWCollisionDict.print_collision( herb1, herb2 )
-		#certain probability of mating?
+	def __init__(self, collisions):
+		super().__init__(self.get_collision_dictionary())
+		self.collisions = collisions
+		self.collisions.set_collision_handler('visual', self.invoke_handler)
 
-	def carn_carn( carn1, carn2 ):
-		CTWCollisionDict.print_collision( carn1, carn2 )
-		#certain probability of mating?
+	def bug_eye(self, bug, eye):
+		self.print_test_message(bug,eye)
 
-	def bug_eye( bug, eye ):
-		CTWCollisionDict.print_collision( bug, eye)
-		#try using the superclass so can just detect color
-		#could always replace with one hot vector classification for the brain so an eye detects a specific type of bug
-
-	CollisionDict={ # look up which function to call when two objects of certain types collide
-		( CTOType.HERB, CTOType.CARN ): herb_carn,
-		( CTOType.HERB, CTOType.HERB): herb_herb,
-		( CTOType.CARN, CTOType.CARN ): carn_carn,
-		( CTOType.CARN, CTOType.CARN ): carn_herb,
-		( CTOType.HERB, CTOType.EYE ): bug_eye,
-		( CTOType.CARN, CTOType.EYE ): bug_eye
+	def get_collision_dictionary(self):
+		cd = {  # look up which function to call when two objects of certain types collide
+			(CTOType.EYE,CTOType.HERB ): self.bug_eye,
+			(CTOType.EYE,CTOType.CARN ): self.bug_eye,
 		}
+		return cd
+
+	def print_test_message(self, obj1, obj2):
+		print("handling: ", obj1.name, " + ", obj2.name)
 
 
-class CollisionTestWorld():
+class CollisionTestWorld():  # Similar to BugWorld
 
-	CTWDict = CTWCollisionDict()
 	Bodies = []
 	Eyes = []
 
-	class CTWEventType():
-		PHYSICAL_EMITTER = int(1)
-		PHYSICAL_DETECTOR = int(2)
-		VISUAL_EMITTER = int(3)
-		VISUAL_DETECTOR = int(4)
+	def __init__(self):
+		self.collisions = Collisions()
+		self.vcm = VisualCollisionMatrix(self.collisions)
+		self.pcm = PhysicalCollisionMatrix(self.collisions)
 
-	def handle_collision( Self, OB1, OB2 ):
-		Self.CTWDict.handle_collision( OB1, OB2 )
-
-	def __init__(Self):
-		#Set up two different collision lists
-		Self.PhysicalCollisions = Collisions( Self.handle_collision )
-		Self.VisualCollisions = Collisions( Self.handle_collision )
-
-	def register_collision_event( Self, collision_event_type, collision_object ):
-		#this abstracts the collision lists from the objects.  They just register for an event.  The world handles where it goes
-		if ( collision_event_type == Self.CTWEventType.PHYSICAL_EMITTER ):
-#			print("Adding Physical Emitter: " + str(collision_object) )
-			Self.PhysicalCollisions.add_emitter( collision_object )
-
-		elif( collision_event_type == Self.CTWEventType.PHYSICAL_DETECTOR):
-#			print("Adding Physical Detector: " + str(collision_object) )
-			Self.PhysicalCollisions.add_detector( collision_object)
-
-		elif( collision_event_type == Self.CTWEventType.VISUAL_EMITTER ):
-#			print("Adding Visual Emitter: " + str(collision_object) )
-			Self.VisualCollisions.add_emitter( collision_object )
-
-		elif( collision_event_type == Self.CTWEventType.VISUAL_DETECTOR ):
-#			print("Adding Visual Detector: " + str(collision_object) )
-			Self.VisualCollisions.add_detector( collision_object )
-		else:
-			print( "Unsupported Event Type: " + collision_event_type )
-
-	def deregister_collision_event( Self, collision_event_type, collision_object ):
-		#this abstracts the collision lists from the objects.  They just register for an event.  The world handles where it goes
-		if ( collision_event_type == Self.CTWEventType.PHYSICAL_EMITTER ):
-			print("Deleting Physical Emitter: " + str(collision_object) )
-			Self.PhysicalCollisions.del_emitter( collision_object )
-
-		elif( collision_event_type == Self.CTWEventType.PHYSICAL_DETECTOR):
-			print("Deleting Physical Detector: " + str(collision_object) )
-			Self.PhysicalCollisions.del_detector( collision_object)
-
-		elif( collision_event_type == Self.CTWEventType.VISUAL_EMITTER ):
-			print("Deleting Visual Emitter: " + str(collision_object) )
-			Self.VisualCollisions.del_emitter( collision_object )
-
-		elif( collision_event_type == Self.CTWEventType.VISUAL_DETECTOR ):
-			print("Deleting Visual Detector: " + str(collision_object) )
-			Self.VisualCollisions.del_detector( collision_object )
-		else:
-			print( "Unsupported Event Type: " + collision_event_type )
-
-	def check_for_collisions( Self ):
-		Self.PhysicalCollisions.detect_collisions()
-		Self.VisualCollisions.detect_collisions()
-		
-
-	def add_bodies( Self ):
+	def add_bodies(self):
 		#x, y, size 
-		locs = [(CTOType.HERB,0,0,5), (CTOType.HERB, 7,0,5), (CTOType.CARN, 9,5,3), (CTOType.HERB,6,3,2)]
+		locs = [[CTOType.HERB,0,0,5], [CTOType.HERB, 7,0,5], [CTOType.CARN, 9,5,3], [CTOType.HERB,6,3,2]]
 		ctr = 0
 
 		for pos in locs:
 			ctr += 1
 			name = "body" + str(ctr)
-			Self.Bodies.append( CollisionTestBody( Self, None, name, pos[0], pos[1], pos[2], pos[3] ) )
+			self.Bodies.append(CollisionTestBody(self.collisions, name, *pos))
 
-	def add_eyes( Self ):
+	def add_eyes(self):
 		#x, y, size 
 		locs = [(-2,0,2), (5,0,2), (0,-20, 2)]
 		ctr = 0
@@ -344,7 +358,7 @@ class CollisionTestWorld():
 		for pos in locs:
 			ctr += 1
 			name = "Eye" + str(ctr)
-			Self.Eyes.append( CollisionTestEye( Self, None, name, pos[0], pos[1], pos[2] ) )
+			self.Eyes.append(CollisionTestEye(self.collisions, None, name, *pos))
 
 	def del_body( Self ):
 #TODO - not sure this is correct way of handling...really 
@@ -354,37 +368,21 @@ class CollisionTestWorld():
 		Self.Bodies[:] = Self.Bodies[2:]
 		del to_kill
 
-	def test_all( Self ):
+	def test_all(self):
 		#add the elements to the World
 
-		print( "--- before any adds ---")
-		print( "Physical Collisions:" )
-		print( Self.PhysicalCollisions )
-		print( "Visual Collisions:" )
-		print( Self.VisualCollisions )
-		print()
+		print("--- before any adds ---")
+		self.add_bodies()
+		print("--- after add bodies ---")
 
-		Self.add_bodies()
-		print( "--- after add bodies ---")
-		print( "Physical Collisions:" )
-		print( Self.PhysicalCollisions )
-		print( "Visual Collisions:" )
-		print( Self.VisualCollisions )
-		print()
+		self.add_eyes()
+		print("--- after add eyes ---")
 
-		Self.add_eyes()
-		print( "--- after add eyes ---")
-		print( "Physical Collisions:" )
-		print( Self.PhysicalCollisions )
-		print( "Visual Collisions:" )
-		print( Self.VisualCollisions )
-		print()
-
-		Self.check_for_collisions()
+		self.collisions.detect_collisions()
 		print("After Collision Check")
 		print()
 
-		Self.del_body()
+		self.del_body()
 		print("After delete body")
 
 		#Test cases
@@ -418,9 +416,5 @@ class CollisionTestWorld():
 	
 
 if __name__ == "__main__":
-        g = CollisionTestWorld()
-        g.test_all()
-
-
-
-	
+	g = CollisionTestWorld()
+	g.test_all()
