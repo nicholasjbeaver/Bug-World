@@ -155,7 +155,8 @@ class CollisionMatrix:
 		return  {'dist_sqrd':dist_sqrd}
 
 	def print_collision(self, OB1, OB2):
-		print(OB1.name + ' T:' + str(OB1.type) + ", " + OB2.name + ' T:' + str(OB2.type))
+#		print(OB1.name + ' T:' + str(OB1.type) + ", " + OB2.name + ' T:' + str(OB2.type))
+		pass
 
 
 class Collisions:

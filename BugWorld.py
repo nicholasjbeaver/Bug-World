@@ -121,6 +121,9 @@ class BWObject(PGObject):  # Bug World Object
 		self.rel_position = BugWorld.adjust_for_boundary(pos_transform)  # class method handles boundary adjustment
 		return self.rel_position
 
+	def get_rel_position(self):  # position relative to its container
+		return self.rel_position
+
 	def set_abs_position(self, base_transform):
 		self.abs_position = np.matmul(base_transform, self.rel_position)
 		return self.abs_position
@@ -366,7 +369,7 @@ class VisualCollisionMatrix(coll.CollisionMatrix):
 		collision_data = self.extract_collision_data(detector, emitter)
 		detector.color = emitter.color
 		owner = detector.owner
-		print(owner.name + ':' + detector.name + ' saw ' + emitter.name + ' at a distance of: ' + str(round(collision_data.get("dist_sqrd"))))
+#		print(owner.name + ':' + detector.name + ' saw ' + emitter.name + ' at a distance of: ' + str(round(collision_data.get("dist_sqrd"))))
 
 
 
@@ -377,12 +380,12 @@ class BugWorld:  # defines the world, holds the objects, defines the rules of in
 	BOUNDARY_HEIGHT = 600
 	BOUNDARY_WRAP = True
 
-	NUM_CARNIVORE_BUGS = 1
-	NUM_OMNIVORE_BUGS = 1
-	NUM_HERBIVORE_BUGS = 1
+	NUM_CARNIVORE_BUGS = 10
+	NUM_OMNIVORE_BUGS = 15
+	NUM_HERBIVORE_BUGS = 20
 	NUM_PLANT_FOOD = 20
 	NUM_MEAT_FOOD = 1
-	NUM_OBSTACLES = 10
+	NUM_OBSTACLES = 20
 	IDENTITY = np.identity(4, int)
 	MAP_TO_CANVAS = [[1,0,0,0], [0,-1,0,BOUNDARY_HEIGHT], [0,0,-1,0], [0,0,0,1]]  # flip x-axis and translate origin
 
@@ -444,8 +447,8 @@ class BugWorld:  # defines the world, holds the objects, defines the rules of in
 				delete_list.append(wo)
 
 				# if it is a bug, then add a meat object to the same location
-				if( wo.type in { BWOType.HERB, BWOType.OMN, BWOType.CARN } ):
-					start_pos = wo.get_abs_position() #get location of the dead bug
+				if wo.type in { BWOType.HERB, BWOType.OMN, BWOType.CARN }:
+					start_pos = wo.get_rel_position()  # get location of the dead bug
 					working_list.append(Meat(self.collisions, start_pos, "M-"+ wo.name  )) #create a meat object at same location
 			else:  # copy the object over to the working list
 				working_list.append(wo)
