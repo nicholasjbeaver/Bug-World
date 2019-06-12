@@ -153,6 +153,13 @@ class BWObject(PGObject):  # Bug World Object
 	def add_subcomponent(self, bwo):
 		self._subcomponents.append(bwo)
 
+	def kill(self):
+		self.kill_subcomponents()
+		try:
+			self.ci.deregister_all()
+		except:
+			pass
+
 	def kill_subcomponents(self):
 		for sc in self._subcomponents:
 			sc.kill()
@@ -329,9 +336,9 @@ class BugWorld:  # defines the world, holds the objects, defines the rules of in
 	BOUNDARY_HEIGHT = 600
 	BOUNDARY_WRAP = True
 
-	NUM_CARNIVORE_BUGS = 5
-	NUM_OMNIVORE_BUGS = 3
-	NUM_HERBIVORE_BUGS = 10
+	NUM_CARNIVORE_BUGS = 1
+	NUM_OMNIVORE_BUGS = 1
+	NUM_HERBIVORE_BUGS = 1
 	NUM_PLANT_FOOD = 20
 	NUM_MEAT_FOOD = 1
 	NUM_OBSTACLES = 5
@@ -386,27 +393,26 @@ class BugWorld:  # defines the world, holds the objects, defines the rules of in
 		#if was a bug, convert it to meat
 		#if it was a plant, just delete it
 
-		#need to keep track of where in list when deleting so that when an item is deleted, the range is shortened.
-		list_len = len(self.WorldObjects)  # starting length of the list of objects
-		i = 0 #index as to where we are in the list
+
+		delete_list = []
+		working_list = []
 
 		#loop through every object in the list
-		while ( i < list_len ):
-			if (self.WorldObjects[i].health <= 0 ): #if the objects health is gone, deal with it.
-				co = self.WorldObjects[i] # get the current object
+		for wo in self.WorldObjects:
+			if wo.health <= 0:  # if the objects health is gone, add it to the list of objects to delete
+				delete_list.append(wo)
 
-				# if it is a bug, then convert it to meat
-				if( co.type in { BWOType.HERB, BWOType.OMN, BWOType.CARN } ):
-					start_pos = co.get_abs_position() #get location of the dead bug
-					self.WorldObjects.append(Meat(self.collisions, start_pos, "M"+ str(i) )) #create a meat object at same location
-					#list length hasn't changed because we are going to delete and add one
-				else:
-					list_len -= 1  # reduce the length of the list
-#TODO use method in collisions file that does not delete from list that is being iterated through
-				del self.WorldObjects[i]  # get rid of the object
-				#'i' should now point to the next one in the list because an item was removed so shouldn't have to increment
-			else:
-				i += 1 #manually increment index pointer because didn't delete the object
+				# if it is a bug, then add a meat object to the same location
+				if( wo.type in { BWOType.HERB, BWOType.OMN, BWOType.CARN } ):
+					start_pos = wo.get_abs_position() #get location of the dead bug
+					working_list.append(Meat(self.collisions, start_pos, "M-"+ wo.name  )) #create a meat object at same location
+			else:  # copy the object over to the working list
+				working_list.append(wo)
+
+		self.WorldObjects = working_list  # copy working list back over to the WorldObjects
+
+		for dl in delete_list: #call the kill method on each object that was marked for deletion.  That will deregister it and clean up
+			dl.kill()
 
 #----- Utility Class Methods ----------------
 
@@ -464,136 +470,6 @@ class BugWorld:  # defines the world, holds the objects, defines the rules of in
 #maximize health
 
 
-#Bug
-#knows how to move
-#holds attributes
-#has a brain
-#has sensors
-#has outputs
-#Bug parts
-#has a shape, size, color, location(relative to base), hitbox(relative to location)
-#knows how to draw itself
-#knows what type of collisions to register for
-'''
-class BugEyeHitbox(BWObject):
-	def __init__(self, pos_transform=BugWorld.IDENTITY, size=15):
-		self.name = "EHB"
-		# position should be center of eye + radius of hitbox
-		super().__init__(pos_transform, self.name)
-		self.size = size
-		self.color = Color.GREY
-
-	def update(self, base):
-		# eyes don't move independent of bug, so relative pos won't change.
-		self.set_abs_position(base)  # update it based on the passed in ref frame
-
-
-class BugEye(BWObject):
-	def __init__(self, pos_transform=BugWorld.IDENTITY, size=1):
-		self.name = "E"
-		super().__init__(pos_transform, self.name)
-		self.size = size
-		self.color = Color.BLACK
-		self.HITBOX_SIZE = self.size * 5
-
-		#add the eye hitbox for the current eye
-		#put hitbox so tangent with eye center...actually add 1 so avoid collision with bug just for efficiency
-		self.HITBOX_LOC = BugWorld.get_pos_transform((self.HITBOX_SIZE + 1), 0, 0, 0)
-		self.hitbox = BugEyeHitbox(self.HITBOX_LOC, self.HITBOX_SIZE)
-
-	def update(self, base):
-		# eyes don't move independent of bug, so relative pos won't change.
-		self.set_abs_position(base) #update it based on the passed in ref frame
-		self.hitbox.update(self.abs_position)
-
-	def draw(self, surface):
-		super().draw(surface) #inherited from BWObject
-		self.hitbox.draw(surface, 1)
-
-
-class Bug(BWObject):
-
-	DEFAULT_TURN_AMT = np.deg2rad(30) # turns are in radians
-	DEFAULT_MOVE_AMT = 5
-
-	def __init__(self, collisions, initial_pos, name ="Bug"):
-		super().__init__(initial_pos, name)
-		self.size = 10  # override default and set the intial radius of bug
-		self.color = Color.PINK  # override default and set the initial color of a default bug
-		self.energy = 100  # default...needs to be overridden
-		self.score = 0  # used to reinforce behaviour.  Add to the score when does a "good" thing
-		self.ci = CollisionInterface(collisions, self)
-		self.ci.register_as_emitter(self, 'physical')
-		self.ci.register_as_detector(self, 'physical')
-
-		# add the eyes for a default bug
-		# put eye center on circumference, rotate then translate.
-		rT = BugWorld.get_pos_transform( 0, 0, 0, np.deg2rad(-30) )
-		tT = BugWorld.get_pos_transform(self.size, 0, 0, 0)
-		self.RIGHT_EYE_LOC = np.matmul(rT, tT)
-
-		rT = BugWorld.get_pos_transform( 0, 0, 0, np.deg2rad(30) )
-		self.LEFT_EYE_LOC = np.matmul(rT, tT)
-
-		self.EYE_SIZE = int(self.size * 0.50) #set a percentage the size of the bug
-		#instantiate the eyes
-		self.RightEye = BugEye(self.RIGHT_EYE_LOC, self.EYE_SIZE)
-#		Self.RightEye.color = Color.RED
-
-		self.LeftEye = BugEye(self.LEFT_EYE_LOC, self.EYE_SIZE)
-
-	def update(self, base):
-#		self.wander() #changes the relative position
-#		self.move_forward( 1 )
-		self.kinematic_wander()
-		self.set_abs_position(base)
-		self.RightEye.update(self.abs_position)
-		self.LeftEye.update(self.abs_position)
-
-	def draw(self, surface):
-		super().draw(surface)  # inherited from BWObject
-		self.RightEye.draw(surface)
-		self.LeftEye.draw(surface)
-
-	def move_forward( Self, amount_to_move = DEFAULT_MOVE_AMT ):
-		# assume bug's 'forward' is along the x direction in local coord frame
-		tM = BugWorld.get_pos_transform( x=amount_to_move, y=0, z=0, theta=0 ) #create an incremental translation
-		Self.set_rel_position ( np.matmul(Self.rel_position, tM)) #update the new position
-
-	def turn_left( Self, theta = DEFAULT_TURN_AMT ):
-		rM = BugWorld.get_pos_transform( x=0, y=0, z=0, theta=theta ) #create an incremental rotation
-		Self.set_rel_position (np.matmul(Self.rel_position, rM )) #update the new position
-
-	def turn_right(self, theta  = DEFAULT_TURN_AMT):
-		#'turning right is just a negative angle passed to turn left'
-		self.turn_left(-theta)
-
-	def wander(self):
-		rand_x = random.randint( 0, Bug.DEFAULT_MOVE_AMT )
-		rand_theta = random.uniform( -Bug.DEFAULT_TURN_AMT, Bug.DEFAULT_TURN_AMT )
-		wM = BugWorld.get_pos_transform( x=rand_x, y=0, z=0, theta=rand_theta ) #create an incremental movement
-		self.set_rel_position(np.matmul(self.rel_position, wM)) #update the new relative position
-
-	def kinematic_wander(self):
-
-		rand_vr = random.uniform( -.5, 1 )  # random right wheel velocity normalized
-		rand_vl = random.uniform( -.5, 1 )  # biased to move forward though
-											# eventually will be driven by a neuron
-
-		delta_x, delta_y, delta_theta = self.kinematic_move(rand_vr, rand_vl)
-		wM = BugWorld.get_pos_transform( x=delta_x, y=delta_y, z=0, theta=delta_theta ) #create an incremental movement
-		self.set_rel_position(np.matmul(self.rel_position, wM))  # update the new relative position
-		
-	def kinematic_move(self, vel_r, vel_l):  	# assume bugbot with two wheels on each side of it.
-												# taken from GRIT robotics course
-		wheel_radius = self.size * 0.5  # wheel radius is some proportion of the radius of the body
-		wheel_separation = self.size * 2  # wheels are separated by the size of the bug
-		delta_theta = ( wheel_radius/wheel_separation)*(vel_r - vel_l )
-		temp_vect = (wheel_radius/2)*(vel_r + vel_l)
-		delta_x = temp_vect * np.cos( delta_theta )
-		delta_y = temp_vect * np.sin( delta_theta )
-		return delta_x, delta_y, delta_theta
-'''
 
 class Herbivore(Bug.Bug):
 	def __init__ (self, collisions, starting_pos, name="HERB"):

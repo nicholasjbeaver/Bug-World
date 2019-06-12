@@ -103,12 +103,7 @@ class Bug(bw.BWObject):
 		#draw subcomponents
 		self.draw_subcomponents(surface)
 
-	def kill(self):
-		self.kill_subcomponents()
-		try:
-			self.ci.deregister_all()
-		except:
-			pass
+
 
 
 

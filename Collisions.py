@@ -52,7 +52,7 @@ class CollisionInterface:
 				self.collisions.deregister_detector(collision_object, collision_type)
 
 	def is_this_me(self, co2):
-		if self.owner == co2:
+		if self.owner == co2.ci.owner:
 			return True
 		else:
 			return False
@@ -93,10 +93,10 @@ class CollisionGroup:
 		#should be called in the destructor method so that it is removed from all lists
 		#See article: https://stackoverflow.com/questions/1207406/how-to-remove-items-from-a-list-while-iterating
 		#somelist[:] = [x for x in somelist if not determine(x)]
-		self._emitters[:] = [co for co in self._emitters if not co == collision_object]
+		self._emitters = [co for co in self._emitters if not co == collision_object]
 
 	def del_detector(self, collision_object):
-		self._detectors[:] = [co for co in self._detectors if not co == collision_object]
+		self._detectors = [co for co in self._detectors if not co == collision_object]
 
 	def circle_collision(self, co1, co2):
 		"""takes two objects presumed to have a center and a size circle."""
@@ -200,7 +200,7 @@ class Collisions:
 
 	def deregister_detector(self, collision_object, collision_type):
 		group = self.lookup_group(collision_type)
-		group.del_emitter(collision_object)
+		group.del_detector(collision_object)
 
 	def detect_collisions(self):
 		#loop through all of the groups and check for collisions
