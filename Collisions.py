@@ -18,6 +18,7 @@ Collision API
 
 """
 
+
 class CollisionInterface:
 	"""Encapsulates everything an object needs to participate in collisions"""
 	_emitter = 'emitter'
@@ -159,10 +160,13 @@ class CollisionMatrix:
 
 class Collisions:
 	"""This contains all of the collision groups, detection between objects"""
-	valid_types = ["physical", "visual"] #"sound, smell, communication, click
+
+	PHYSICAL = 'physical'
+	VISUAL = 'visual'
+	valid_types = [PHYSICAL, VISUAL] #"sound, smell, communication, click
 	collision_groups = {}
 
-	def default_handler(self):  # this should only be called if no handler is set for a collision group.
+	def default_handler(self, *kwargs ):  # this should only be called if no handler is set for a collision group.
 		print("Error, no handler set for the group.  Need to instantiate a CollisionMatrix and assign handler")
 
 	def __init__(self):

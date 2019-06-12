@@ -47,7 +47,6 @@ class PGObject():
 #objects have hitboxes for each sensor.
 
 
-#how do you keep senses from sensing itself
 #objects emit sound (varies on speed)
 #objects emit smell
 #objects have physical collision
@@ -57,7 +56,7 @@ class PGObject():
 #eye collision also gives distance
 #bodies collide with other solid bodies
 
-# has the sample time which is the update loop time...used for velocity and accleration
+# has the sample time which is the update loop time...used for velocity and acceleration
 
 #detects collisions
 #	- different hitbox shapes.  Hitbox needed for eyes so that collisions can be detected
@@ -500,7 +499,7 @@ class Obstacle(BWObject):
 		self.size = 7
 		self.health = 100
 		self.ci = coll.CollisionInterface(collisions, self)
-		self.ci.register_as_emitter(self, 'physical')
+		self.ci.register_as_emitter(self, coll.Collisions.PHYSICAL)
 
 
 class Meat(BWObject):
@@ -511,7 +510,7 @@ class Meat(BWObject):
 		self.size = 10
 		self.health = 100
 		self.ci = coll.CollisionInterface(collisions, self)
-		self.ci.register_as_emitter(self, 'physical')
+		self.ci.register_as_emitter(self, coll.Collisions.PHYSICAL)
 
 class Plant(BWObject):
 	def __init__(self, collisions, starting_pos, name="PLANT"):
@@ -521,7 +520,7 @@ class Plant(BWObject):
 		self.size = 5
 		self.health = 100
 		self.ci = coll.CollisionInterface(collisions, self)
-		self.ci.register_as_emitter(self, 'physical')
+		self.ci.register_as_emitter(self, coll.Collisions.PHYSICAL)
 
 
 

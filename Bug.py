@@ -18,7 +18,7 @@ class BugEyeHitbox(bw.BWObject):
 		self.size = size
 		self.color = bw.Color.GREY
 		self.ci = coll.CollisionInterface(collisions, owner)
-		self.ci.register_as_detector(self, 'visual')
+		self.ci.register_as_detector(self, coll.Collisions.VISUAL)
 
 	def update(self, base):
 		# eyes don't move independent of bug, so relative pos won't change.
@@ -70,9 +70,9 @@ class Bug(bw.BWObject):
 		self.score = 0  # used to reinforce behaviour.  Add to the score when does a "good" thing
 		self.owner = self
 		self.ci = coll.CollisionInterface(collisions, self.owner)
-		self.ci.register_as_emitter(self, 'physical')
-		self.ci.register_as_detector(self, 'physical')
-#		self.ci.register_as_emitter(self, 'visual')
+		self.ci.register_as_emitter(self, coll.Collisions.PHYSICAL)
+		self.ci.register_as_detector(self, coll.Collisions.PHYSICAL)
+		self.ci.register_as_emitter(self, coll.Collisions.VISUAL)
 
 		# add the eyes for a default bug
 		# put eye center on circumference, rotate then translate.
