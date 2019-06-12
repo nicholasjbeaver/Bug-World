@@ -1,6 +1,5 @@
 
-#need gracefully delete
-#need gracefull deregister
+
 #break out utility methods
 #factor code into modules for import
 #global values for visibility
@@ -17,6 +16,9 @@ class BugEyeHitbox(bw.BWObject):
 		super().__init__(pos_transform, self.name)
 		self.size = size
 		self.color = bw.Color.GREY
+		self.default_color = self.color
+		self.type = bw.BWOType.EHB
+		self.owner = owner
 		self.ci = coll.CollisionInterface(collisions, owner)
 		self.ci.register_as_detector(self, coll.Collisions.VISUAL)
 
@@ -26,6 +28,8 @@ class BugEyeHitbox(bw.BWObject):
 
 	def draw(self, surface):
 		super().draw(surface, 1)  # the 1 says to draw the outline only
+		self.color = self.default_color
+
 
 
 class BugEye(bw.BWObject):
@@ -35,6 +39,8 @@ class BugEye(bw.BWObject):
 		super().__init__(pos_transform, self.name)
 		self.size = size
 		self.color = bw.Color.BLACK
+		self.default_color = self.color
+		self.type = bw.BWOType.EHB
 		self.owner = owner
 		self.HITBOX_SIZE = self.size * 5
 
@@ -47,10 +53,6 @@ class BugEye(bw.BWObject):
 		# eyes don't move independent of bug, so relative pos won't change.
 		self.set_abs_position(base) #update it based on the passed in ref frame
 		self.update_subcomponents(self.abs_position)
-
-	def draw(self, surface):
-		super().draw(surface)
-		self.draw_subcomponents(surface)
 
 	'''Bug is made up of different parts'''
 	'''body, left eye, right eye, left ear, right ear, antenna, nose, gland (to emit odor), speaker (to emit sound)
@@ -65,6 +67,7 @@ class Bug(bw.BWObject):
 		super().__init__(initial_pos, name)
 		self.size = 10  # override default and set the intial radius of bug
 		self.color = bw.Color.PINK  # override default and set the initial color of a default bug
+		self.default_color = self.color
 		self.energy = 100  # default...needs to be overridden
 		self.health = 100
 		self.score = 0  # used to reinforce behaviour.  Add to the score when does a "good" thing
@@ -96,15 +99,6 @@ class Bug(bw.BWObject):
 
 		#update subcomponents
 		self.update_subcomponents(self.abs_position)
-
-	def draw(self, surface):
-		super().draw(surface)  # inherited from BWObject
-
-		#draw subcomponents
-		self.draw_subcomponents(surface)
-
-
-
 
 
 ############ Movement stuff #######################

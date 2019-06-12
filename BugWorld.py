@@ -110,6 +110,7 @@ class BWObject(PGObject):  # Bug World Object
 		self.name = name
 		self.size = 1  # default...needs to be overridden
 		self.color = Color.BLACK  # default...needs to be overridden
+		self.default_color = self.color
 		self.type = BWOType.OBJ  # default...needs to be overridden
 		self._subcomponents = []  # a list of subcomponents in the object
 
@@ -144,6 +145,11 @@ class BWObject(PGObject):  # Bug World Object
 	def update_subcomponents(self, base):
 		for sc in self._subcomponents:
 			sc.update(base)
+
+	def draw(self, surface, fill=0):
+		super().draw(surface, fill)
+		self.color = self.default_color
+		self.draw_subcomponents(surface)
 
 	def draw_subcomponents(self, surface):
 		for sc in self._subcomponents:
@@ -203,7 +209,8 @@ class BWOType:
 	MEAT = int(6)  	# Food for Carnivore and Omnivore
 	PLANT = int(7)  # Food for Herbivore and Omnivore
 	EYE = int(8)  	# for eyes
-	OBJ = int(9)  	# catch all for the base class.  Shouldn't ever show up
+	EHB = int(9)    # for eye hit boxes
+	OBJ = int(10)  	# catch all for the base class.  Shouldn't ever show up
 
 	
 class PhysicalCollisionMatrix(coll.CollisionMatrix):
@@ -211,7 +218,7 @@ class PhysicalCollisionMatrix(coll.CollisionMatrix):
 	def __init__(self, collisions):
 		super().__init__(self.get_collision_dictionary())
 		self.collisions = collisions
-		self.collisions.set_collision_handler('physical', self.invoke_handler)
+		self.collisions.set_collision_handler(coll.Collisions.PHYSICAL, self.invoke_handler)
 
 #Bug to Bug interactions
 	def herb_omn(self, herb, omn):  # handle herbivore an omnivore collision
@@ -327,6 +334,41 @@ class PhysicalCollisionMatrix(coll.CollisionMatrix):
 		}
 		return cd
 
+class VisualCollisionMatrix(coll.CollisionMatrix):
+
+	def __init__(self, collisions):
+		super().__init__(self.get_collision_dictionary())
+		self.collisions = collisions
+		self.collisions.set_collision_handler(coll.Collisions.VISUAL, self.invoke_handler)
+
+#Bug to Bug interactions
+	def ehb_omn(self, ehb, omn):  # handle herbivore an omnivore collision
+		self.print_collision(ehb, omn)
+		print('I see an omnivore!')
+
+	def ehb_herb(self, ehb, herb):  # handle herbivore an omnivore collision
+		self.print_collision(ehb, herb)
+		print('I see an herbivore')
+
+	def ehb_carn(self, ehb, carn):
+		self.print_collision(ehb, carn )
+		print('I see a carnivore!')
+
+	def get_collision_dictionary(self):
+		cd = {  # look up which function to call when two objects of certain types collide
+			(BWOType.EHB, BWOType.OMN): self.ehb_omn,
+			(BWOType.EHB, BWOType.CARN): self.ehb_carn,
+			(BWOType.EHB, BWOType.HERB): self.ehb_herb,
+		}
+		return cd
+
+	def invoke_handler(self, detector, emitter):
+		collision_data = self.extract_collision_data(detector, emitter)
+		detector.color = emitter.color
+		owner = detector.owner
+		print(owner.name + ':' + detector.name + ' saw ' + emitter.name + ' at a distance of: ' + str(round(collision_data.get("dist_sqrd"))))
+
+
 
 class BugWorld:  # defines the world, holds the objects, defines the rules of interaction
 
@@ -340,7 +382,7 @@ class BugWorld:  # defines the world, holds the objects, defines the rules of in
 	NUM_HERBIVORE_BUGS = 1
 	NUM_PLANT_FOOD = 20
 	NUM_MEAT_FOOD = 1
-	NUM_OBSTACLES = 5
+	NUM_OBSTACLES = 10
 	IDENTITY = np.identity(4, int)
 	MAP_TO_CANVAS = [[1,0,0,0], [0,-1,0,BOUNDARY_HEIGHT], [0,0,-1,0], [0,0,0,1]]  # flip x-axis and translate origin
 
@@ -350,6 +392,7 @@ class BugWorld:  # defines the world, holds the objects, defines the rules of in
 	def __init__(self):
 		self.collisions = coll.Collisions()
 		self.pcm = PhysicalCollisionMatrix(self.collisions)
+		self.vcm = VisualCollisionMatrix(self.collisions)
 		self.rel_position = BugWorld.MAP_TO_CANVAS #maps Bug World coords to the canvas coords in Pygame
 		for i in range(0, BugWorld.NUM_HERBIVORE_BUGS): #instantiate all of the Herbivores with a default name
 			start_pos = BugWorld.get_random_location_in_world(self)
@@ -391,7 +434,6 @@ class BugWorld:  # defines the world, holds the objects, defines the rules of in
 		#if health < 0, delete.
 		#if was a bug, convert it to meat
 		#if it was a plant, just delete it
-
 
 		delete_list = []
 		working_list = []
@@ -474,6 +516,7 @@ class Herbivore(Bug.Bug):
 	def __init__ (self, collisions, starting_pos, name="HERB"):
 		super().__init__(collisions, starting_pos, name )
 		self.color = Color.GREEN
+		self.default_color = self.color
 		self.type = BWOType.HERB
 
 
@@ -481,6 +524,7 @@ class Omnivore(Bug.Bug):
 	def __init__(self, collisions, starting_pos, name="OMN"):
 		super().__init__(collisions, starting_pos, name )
 		self.color = Color.ORANGE
+		self.default_color = self.color
 		self.type = BWOType.OMN
 
 
@@ -488,6 +532,7 @@ class Carnivore(Bug.Bug):
 	def __init__(self, collisions, starting_pos, name="CARN"):
 		super().__init__(collisions, starting_pos, name )
 		self.color = Color.RED
+		self.default_color = self.color
 		self.type = BWOType.CARN
 
 
@@ -495,32 +540,40 @@ class Obstacle(BWObject):
 	def __init__ (self, collisions, starting_pos, name="OBST"):
 		super().__init__(starting_pos, name )
 		self.color = Color.YELLOW
+		self.default_color = self.color
 		self.type = BWOType.OBST
 		self.size = 7
 		self.health = 100
 		self.ci = coll.CollisionInterface(collisions, self)
 		self.ci.register_as_emitter(self, coll.Collisions.PHYSICAL)
+		self.ci.register_as_emitter(self, coll.Collisions.VISUAL)
 
 
 class Meat(BWObject):
 	def __init__ (self, collisions, starting_pos, name ="MEAT"):
 		super().__init__(starting_pos, name )
 		self.color = Color.BROWN
+		self.default_color = self.color
 		self.type = BWOType.MEAT
 		self.size = 10
 		self.health = 100
 		self.ci = coll.CollisionInterface(collisions, self)
 		self.ci.register_as_emitter(self, coll.Collisions.PHYSICAL)
+		self.ci.register_as_emitter(self, coll.Collisions.VISUAL)
+
 
 class Plant(BWObject):
 	def __init__(self, collisions, starting_pos, name="PLANT"):
 		super().__init__(starting_pos, name )
 		self.color = Color.DARK_GREEN
+		self.default_color = self.color
 		self.type = BWOType.PLANT
 		self.size = 5
 		self.health = 100
 		self.ci = coll.CollisionInterface(collisions, self)
 		self.ci.register_as_emitter(self, coll.Collisions.PHYSICAL)
+		self.ci.register_as_emitter(self, coll.Collisions.VISUAL)
+
 
 
 
