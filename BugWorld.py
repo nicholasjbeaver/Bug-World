@@ -1,5 +1,5 @@
 
-#to fix bad merge 3
+#To start working on composition structure of bugs
 
 #PGBugWorld where pygame dependent code goes
 #contains draw code
@@ -8,23 +8,24 @@
 #----------------- START PYGAME SPECIFIC CODE ---------------------------------------
 import pygame
 
-#assume 2D graphics and using Pygame to render.
+# assume 2D graphics and using Pygame to render.
 class PGObject():
 	color = (0, 0, 0)  # default, must be overwritten
 	size = 1  # default, must be overwritten
+	visible = True  # will indicate whether to draw the object or not
 
-	def draw(self, surface, fill=0): #fill = 0 means solid, = 1 means outline only
+	def draw(self, surface, fill=0):  # fill = 0 means solid, = 1 means outline only
 		x = int(self.get_abs_x())
 		y = int(self.get_abs_y())
-		r, g, b = self.color #unpack the tuple
+		r, g, b = self.color  # unpack the tuple
 
 #TODO modulate color based on health
 		# hp = Self.health/100 #what is the health percentage
 		# r *= hp
 		# g *= hp
 		# b *= hp
-
-		pygame.draw.circle(surface, (int(r), int(g), int(b)), (x, y), self.size, fill)
+		if self.visible:
+			pygame.draw.circle(surface, (int(r), int(g), int(b)), (x, y), self.size, fill)
 	
 	def get_abs_x(self):  # must be overwritten
 		return 0
@@ -92,6 +93,73 @@ class PGObject():
 import numpy as np
 import random
 
+class BWObject(PGObject):  # Bug World Object
+
+	#Everything is a BWObject including bug body parts (e.g., eyes, ears, noses).
+	#has a position and orientation relative to the container, which could be the world.  But it could be the body, the eye
+	#has a color
+	#has a size
+	#has a name
+	#stores an absolute position to prevent recalculating it when passing to contained objects.
+	#BWO's should have a draw method that includes itself
+	#BWO's should have an update method that includes itself and any subcomponents
+
+
+	def __init__(self, starting_pos, name="BWOBject"):
+		self.rel_position = starting_pos
+		self.abs_position = starting_pos
+		self.name = name
+		self.size = 1  # default...needs to be overridden
+		self.color = Color.BLACK  # default...needs to be overridden
+		self.type = BWOType.OBJ  # default...needs to be overridden
+		self._subcomponents = []  # a list of subcomponents in the object
+
+	def __repr__(self):
+		return self.name + ": abs position={}".format(self.abs_position)  # print its name and transform
+
+	def set_rel_position(self, pos_transform):  # position relative to its container
+		self.rel_position = BugWorld.adjust_for_boundary(pos_transform)  # class method handles boundary adjustment
+		return self.rel_position
+
+	def set_abs_position(self, base_transform):
+		self.abs_position = np.matmul(base_transform, self.rel_position)
+		return self.abs_position
+
+	def get_abs_position(self):
+		return self.abs_position
+
+	def get_abs_x(self):
+		return BugWorld.get_x(self.abs_position)
+
+	def get_abs_y(self):
+		return BugWorld.get_y(self.abs_position)
+
+	def get_size(self):
+		return self.size
+
+	def update(self, base):
+		# eyes don't move independent of bug, so relative pos won't change.
+		self.set_abs_position(base) #update it based on the passed in ref frame
+		self.update_subcomponents(self.abs_position)
+
+	def update_subcomponents(self, base):
+		for sc in self._subcomponents:
+			sc.update(base)
+
+	def draw_subcomponents(self, surface):
+		for sc in self._subcomponents:
+			sc.draw(surface)
+
+	def add_subcomponent(self, bwo):
+		self._subcomponents.append(bwo)
+
+	def kill_subcomponents(self):
+		for sc in self._subcomponents:
+			sc.kill()
+
+
+import Bug
+
 #Going to use 3D matrices even if in 2d
 #See http://matthew-brett.github.io/transforms3d/ for details on the lib used
 #Object's local coord frame is in the x,y plane and faces in the x direction.  
@@ -99,7 +167,7 @@ import random
 import transforms3d.affines as AFF 
 import transforms3d.euler as E
 
-from Collisions import *
+import Collisions as coll
 
 #Color class so can separate out code from PG specific stuff.
 #http://www.discoveryplayground.com/computer-programming-for-kids/rgb-colors/
@@ -132,7 +200,7 @@ class BWOType:
 	OBJ = int(9)  	# catch all for the base class.  Shouldn't ever show up
 
 	
-class PhysicalCollisionMatrix(CollisionMatrix):
+class PhysicalCollisionMatrix(coll.CollisionMatrix):
 
 	def __init__(self, collisions):
 		super().__init__(self.get_collision_dictionary())
@@ -267,14 +335,14 @@ class BugWorld:  # defines the world, holds the objects, defines the rules of in
 	NUM_PLANT_FOOD = 20
 	NUM_MEAT_FOOD = 1
 	NUM_OBSTACLES = 5
-	IDENTITY = [[1,0,0,0], [0,1,0,0], [0,0,1,0], [0,0,0,1]]  # equates to x=0, y=0, z=0, rotation = 0
+	IDENTITY = np.identity(4, int)
 	MAP_TO_CANVAS = [[1,0,0,0], [0,-1,0,BOUNDARY_HEIGHT], [0,0,-1,0], [0,0,0,1]]  # flip x-axis and translate origin
 
 	WorldObjects = []
 
 #--- Instance Methods
 	def __init__(self):
-		self.collisions = Collisions()
+		self.collisions = coll.Collisions()
 		self.pcm = PhysicalCollisionMatrix(self.collisions)
 		self.rel_position = BugWorld.MAP_TO_CANVAS #maps Bug World coords to the canvas coords in Pygame
 		for i in range(0, BugWorld.NUM_HERBIVORE_BUGS): #instantiate all of the Herbivores with a default name
@@ -333,9 +401,9 @@ class BugWorld:  # defines the world, holds the objects, defines the rules of in
 					self.WorldObjects.append(Meat(self.collisions, start_pos, "M"+ str(i) )) #create a meat object at same location
 					#list length hasn't changed because we are going to delete and add one
 				else:
-					list_len -= 1	#reduce the length of the list 
-
-				del self.WorldObjects[i] #get rid of the object
+					list_len -= 1  # reduce the length of the list
+#TODO use method in collisions file that does not delete from list that is being iterated through
+				del self.WorldObjects[i]  # get rid of the object
 				#'i' should now point to the next one in the list because an item was removed so shouldn't have to increment
 			else:
 				i += 1 #manually increment index pointer because didn't delete the object
@@ -374,69 +442,21 @@ class BugWorld:  # defines the world, holds the objects, defines the rules of in
 		return position[1][3] 
 
 	def get_random_location_in_world(self):
-		x = random.randint(0, BugWorld.BOUNDARY_WIDTH )
+		x = random.randint(0, BugWorld.BOUNDARY_WIDTH)
 		y = random.randint(0, BugWorld.BOUNDARY_HEIGHT)
 		z = 0
 		theta = random.uniform(0, 2*np.pi)  # orientation in radians
 		return BugWorld.get_pos_transform(x, y, z, theta)
 	
 
-class BWObject(PGObject):  # Bug World Object
-
-	#Everything is a BWObject including bug body parts (e.g., eyes, ears, noses).
-	#has a position and orientation relative to the container, which could be the world.  But it could be the body, the eye
-	#has a color
-	#has a size
-	#has a name
-	#stores an absolute position to prevent recalculating it when passing to contained objects.
-	#BWO's should have a draw method that includes itself, hitboxes (based on global var)
-	#stub methods for what collisions to register for
-
-	def __init__(self, starting_pos=BugWorld.IDENTITY, name="BWOBject"):
-		self.rel_position = starting_pos
-		self.abs_position = starting_pos
-		self.name = name
-		self.size = 1  # default...needs to be overridden
-		self.color = Color.BLACK  # default...needs to be overridden
-		self.type = BWOType.OBJ  # default...needs to be overridden
-		self.health = 100  # default...needs to be overridden
-
-	def __repr__(self):
-		return self.name + ": abs position={}".format(self.abs_position)  # print its name and transform
-
-	def set_rel_position(self, pos_transform = BugWorld.IDENTITY):  # position relative to its container
-		self.rel_position = BugWorld.adjust_for_boundary(pos_transform)  # class method handles boundary adjustment
-		return self.rel_position
-
-	def set_abs_position(self, base_transform = BugWorld.IDENTITY):
-		self.abs_position = np.matmul(base_transform, self.rel_position)
-		return self.abs_position
-
-	def get_abs_position(self):
-		return self.abs_position
-
-	def get_abs_x(self):
-		return BugWorld.get_x(self.abs_position)
-
-	def get_abs_y(self):
-		return BugWorld.get_y(self.abs_position)
-
-	def get_size(self):
-		return self.size
-
-	def update(self, base): #stub method. Override to move this object each sample period
-		pass	
 
 
-#Things to do
+#TODO
 #import logging
 #have a scale for drawing in pygame that is independent of bug kinematics
 
 
 #have a sample period so can do velocity
-#simulate collision dynamics to mimic accelerometer
-#kinematics for zumo
-#kinematics for gopigo
 
 #range
 #collisions could do damage
@@ -454,18 +474,18 @@ class BWObject(PGObject):  # Bug World Object
 #has a shape, size, color, location(relative to base), hitbox(relative to location)
 #knows how to draw itself
 #knows what type of collisions to register for
-
+'''
 class BugEyeHitbox(BWObject):
 	def __init__(self, pos_transform=BugWorld.IDENTITY, size=15):
 		self.name = "EHB"
-		#position should be center of eye + radius of hitbox
+		# position should be center of eye + radius of hitbox
 		super().__init__(pos_transform, self.name)
 		self.size = size
 		self.color = Color.GREY
 
-	def update(Self, base):
+	def update(self, base):
 		# eyes don't move independent of bug, so relative pos won't change.
-		Self.set_abs_position(base)  # update it based on the passed in ref frame
+		self.set_abs_position(base)  # update it based on the passed in ref frame
 
 
 class BugEye(BWObject):
@@ -506,8 +526,8 @@ class Bug(BWObject):
 		self.ci.register_as_emitter(self, 'physical')
 		self.ci.register_as_detector(self, 'physical')
 
-		#add the eyes for a default bug
-		#put eye center on circumference, rotate then translate.
+		# add the eyes for a default bug
+		# put eye center on circumference, rotate then translate.
 		rT = BugWorld.get_pos_transform( 0, 0, 0, np.deg2rad(-30) )
 		tT = BugWorld.get_pos_transform(self.size, 0, 0, 0)
 		self.RIGHT_EYE_LOC = np.matmul(rT, tT)
@@ -573,23 +593,23 @@ class Bug(BWObject):
 		delta_x = temp_vect * np.cos( delta_theta )
 		delta_y = temp_vect * np.sin( delta_theta )
 		return delta_x, delta_y, delta_theta
+'''
 
-
-class Herbivore(Bug):
+class Herbivore(Bug.Bug):
 	def __init__ (self, collisions, starting_pos, name="HERB"):
 		super().__init__(collisions, starting_pos, name )
 		self.color = Color.GREEN
 		self.type = BWOType.HERB
 
 
-class Omnivore(Bug):
+class Omnivore(Bug.Bug):
 	def __init__(self, collisions, starting_pos, name="OMN"):
 		super().__init__(collisions, starting_pos, name )
 		self.color = Color.ORANGE
 		self.type = BWOType.OMN
 
 
-class Carnivore(Bug):
+class Carnivore(Bug.Bug):
 	def __init__(self, collisions, starting_pos, name="CARN"):
 		super().__init__(collisions, starting_pos, name )
 		self.color = Color.RED
@@ -602,7 +622,8 @@ class Obstacle(BWObject):
 		self.color = Color.YELLOW
 		self.type = BWOType.OBST
 		self.size = 7
-		self.ci = CollisionInterface(collisions, self)
+		self.health = 100
+		self.ci = coll.CollisionInterface(collisions, self)
 		self.ci.register_as_emitter(self, 'physical')
 
 
@@ -612,7 +633,8 @@ class Meat(BWObject):
 		self.color = Color.BROWN
 		self.type = BWOType.MEAT
 		self.size = 10
-		self.ci = CollisionInterface(collisions, self)
+		self.health = 100
+		self.ci = coll.CollisionInterface(collisions, self)
 		self.ci.register_as_emitter(self, 'physical')
 
 class Plant(BWObject):
@@ -621,7 +643,8 @@ class Plant(BWObject):
 		self.color = Color.DARK_GREEN
 		self.type = BWOType.PLANT
 		self.size = 5
-		self.ci = CollisionInterface(collisions, self)
+		self.health = 100
+		self.ci = coll.CollisionInterface(collisions, self)
 		self.ci.register_as_emitter(self, 'physical')
 
 
