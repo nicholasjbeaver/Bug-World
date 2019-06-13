@@ -1,3 +1,4 @@
+import logging
 
 #To start working on composition structure of bugs
 
@@ -226,40 +227,40 @@ class PhysicalCollisionMatrix(coll.CollisionMatrix):
 #Bug to Bug interactions
 	def herb_omn(self, herb, omn):  # handle herbivore an omnivore collision
 		self.print_collision(herb, omn)
-		print('danger there is an omnivore!')
+		logging.info('danger there is an omnivore!')
 		# if the herb detects the omn, do nothing
 
 	def omn_herb(self, omn, herb):  # handle herbivore an omnivore collision
 		self.print_collision(omn, herb)
 		# do damage to herbivore
-		print('herb says that the omn hurt him')
+		logging.info('herb says that the omn hurt him')
 		herb.health -= 1
 
 	def herb_carn(self, herb, carn):
 		self.print_collision(herb, carn )
 		# if the herb detects the carn, do nothing
-		print('danger there is a carnivore!')
+		logging.info('danger there is a carnivore!')
 
 	def carn_herb(self, carn, herb):  # handle herbivore an omnivore collision
 		self.print_collision(carn, herb)
 		# do damage to herbivore
-		print('herb says that the carn hurt him')
+		logging.info('herb says that the carn hurt him')
 		herb.health -= 1
 
 	def herb_herb(self, herb1, herb2):
 		self.print_collision(herb1, herb2)
 		#certain probability of mating?
-		print("should herbivores mate?")
+		logging.info("should herbivores mate?")
 
 	def omn_omn(self, omn1, omn2):
 		self.print_collision(omn1, omn2)
 		# certain probability of mating?
-		print("should omnivores mate?")
+		logging.info("should omnivores mate?")
 
 	def carn_omn(self, carn, omn):
 		self.print_collision(carn, omn)
 		# do damage to omn
-		print('carn and omn did battle')
+		logging.info('carn and omn did battle')
 
 		omn.health -= 20
 		carn.health -= 5
@@ -269,12 +270,12 @@ class PhysicalCollisionMatrix(coll.CollisionMatrix):
 		# do damage to omn
 		omn.health -= 5
 		carn.health -= 5
-		print('omn says did a little damage to that carnivore!')
+		logging.info('omn says did a little damage to that carnivore!')
 
 	def carn_carn(self, carn1, carn2):
 		self.print_collision(carn1, carn2)
 		# certain probability of mating or fighting?
-		print('carn beatn up on his own kind')
+		logging.info('carn beatn up on his own kind')
 		carn2.health -= 5
 
 
@@ -347,15 +348,15 @@ class VisualCollisionMatrix(coll.CollisionMatrix):
 #Bug to Bug interactions
 	def ehb_omn(self, ehb, omn):  # handle herbivore an omnivore collision
 		self.print_collision(ehb, omn)
-		print('I see an omnivore!')
+		logging.info('I see an omnivore!')
 
 	def ehb_herb(self, ehb, herb):  # handle herbivore an omnivore collision
 		self.print_collision(ehb, herb)
-		print('I see an herbivore')
+		logging.info('I see an herbivore')
 
 	def ehb_carn(self, ehb, carn):
 		self.print_collision(ehb, carn )
-		print('I see a carnivore!')
+		logging.info('I see a carnivore!')
 
 	def get_collision_dictionary(self):
 		cd = {  # look up which function to call when two objects of certain types collide
@@ -369,7 +370,7 @@ class VisualCollisionMatrix(coll.CollisionMatrix):
 		collision_data = self.extract_collision_data(detector, emitter)
 		detector.color = emitter.color
 		owner = detector.owner
-#		print(owner.name + ':' + detector.name + ' saw ' + emitter.name + ' at a distance of: ' + str(round(collision_data.get("dist_sqrd"))))
+		logging.info(owner.name + ':' + detector.name + ' saw ' + emitter.name + ' at a distance of: ' + str(round(collision_data.get("dist_sqrd"))))
 
 
 

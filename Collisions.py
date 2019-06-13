@@ -1,3 +1,4 @@
+import logging
 
 """
 Collision API
@@ -31,7 +32,7 @@ class CollisionInterface:
 
 	def register_as_emitter(self, collision_object, collision_type):
 		if collision_type not in self.collisions.valid_types:
-			print("Unsupported collision type: ", collision_type)
+			logging.error("Unsupported collision type: ", collision_type)
 			return
 		else:
 			self.collisions.register_emitter(collision_object, collision_type)
@@ -39,7 +40,7 @@ class CollisionInterface:
 
 	def register_as_detector(self, collision_object, collision_type):
 		if collision_type not in self.collisions.valid_types:
-			print("Unsupported collision type: ", collision_type)
+			logging.error("Unsupported collision type: ", collision_type)
 			return
 		else:
 			self.collisions.register_detector(collision_object, collision_type)
@@ -124,7 +125,7 @@ class CollisionGroup:
 				if co1.ci.is_this_me(co2):
 					continue #make sure the object is not part of the bug that owns it
 				elif self.circle_collision(co1, co2):
-#					print("Detector: " + co1.name + " detected Emitter:" + co2.name )
+					logging.debug("Detector: " + co1.name + " detected Emitter:" + co2.name )
 					self._cb(co1, co2) #call the callback handler
 
 
@@ -135,12 +136,12 @@ class CollisionMatrix:
 		self.collision_dictionary = collision_dictionary
 
 	def invoke_handler(self, detector, emitter):
-#		self.print_collision(detector, emitter)
+		self.print_collision(detector, emitter)
 		collision_data = self.extract_collision_data(detector, emitter)
 		try:
 			self.collision_dictionary[(detector.type, emitter.type)](detector, emitter)  # use types to lookup function to call and then call it
 		except KeyError:
-			print('No handler for: ' + detector.name + ' T:' + str(detector.type) + ", " + emitter.name + ' T:' + str(emitter.type))
+			logging.warning('No handler for: ' + detector.name + ' T:' + str(detector.type) + ", " + emitter.name + ' T:' + str(emitter.type))
 
 	def extract_collision_data(self, detector, emitter):
 		"""
@@ -155,7 +156,7 @@ class CollisionMatrix:
 		return  {'dist_sqrd':dist_sqrd}
 
 	def print_collision(self, OB1, OB2):
-#		print(OB1.name + ' T:' + str(OB1.type) + ", " + OB2.name + ' T:' + str(OB2.type))
+		logging.debug(OB1.name + ' T:' + str(OB1.type) + ", " + OB2.name + ' T:' + str(OB2.type))
 		pass
 
 
@@ -168,7 +169,7 @@ class Collisions:
 	collision_groups = {}
 
 	def default_handler(self, *kwargs ):  # this should only be called if no handler is set for a collision group.
-		print("Error, no handler set for the group.  Need to instantiate a CollisionMatrix and assign handler")
+		logging.error("Error, no handler set for the group.  Need to instantiate a CollisionMatrix and assign handler")
 
 	def __init__(self):
 		#for each type, create a group
@@ -181,7 +182,7 @@ class Collisions:
 		try:
 			return self.collision_groups[collision_type]
 		except KeyError:
-			print("invalid collision type: ", collision_type)
+			logging.warning("invalid collision type: ", collision_type)
 			exit()
 
 	def set_collision_handler(self, collision_type, handler):
@@ -258,10 +259,7 @@ class CollisionTestObject: #simlar to BugWorldObject
 
 	def kill(self):
 		self.ci.deregister_all()
-		print('About to die: ' + self.name)
-
-#	def __del__(self):
-#		print("Destructor Called " + self.name)
+		logging.debug('About to die: ' + self.name)
 
 
 class CollisionTestBody(CollisionTestObject):
@@ -312,7 +310,7 @@ class PhysicalCollisionMatrix(CollisionMatrix):
 		return cd
 
 	def print_test_message(self, obj1, obj2):
-		print("handling: ", obj1.name, " + ", obj2.name)
+		logging.debug("handling: ", obj1.name, " + ", obj2.name)
 
 class VisualCollisionMatrix(CollisionMatrix):
 
@@ -332,7 +330,7 @@ class VisualCollisionMatrix(CollisionMatrix):
 		return cd
 
 	def print_test_message(self, obj1, obj2):
-		print("handling: ", obj1.name, " + ", obj2.name)
+		logging.debug("handling: ", obj1.name, " + ", obj2.name)
 
 
 class CollisionTestWorld():  # Similar to BugWorld
@@ -376,19 +374,19 @@ class CollisionTestWorld():  # Similar to BugWorld
 	def test_all(self):
 		#add the elements to the World
 
-		print("--- before any adds ---")
+		logging.debug("--- before any adds ---")
 		self.add_bodies()
-		print("--- after add bodies ---")
+		logging.debug("--- after add bodies ---")
 
 		self.add_eyes()
-		print("--- after add eyes ---")
+		logging.debug("--- after add eyes ---")
 
 		self.collisions.detect_collisions()
-		print("After Collision Check")
-		print()
+		logging.debug("After Collision Check")
+		logging.debug()
 
 		self.del_body()
-		print("After delete body")
+		logging.debug("After delete body")
 
 		#Test cases
 

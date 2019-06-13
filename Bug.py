@@ -4,6 +4,7 @@
 #factor code into modules for import
 #global values for visibility
 
+import logging
 import numpy as np
 import random
 import BugWorld as bw
