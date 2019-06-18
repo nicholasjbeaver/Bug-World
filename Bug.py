@@ -10,6 +10,9 @@ import random
 import BugWorld as bw
 import Collisions as coll
 
+logger = logging.getLogger()
+logger.setLevel(logging.ERROR)
+
 class BugEyeHitbox(bw.BWObject):
 	def __init__(self, collisions, owner, pos_transform, size=15):
 		self.name = "EHB"

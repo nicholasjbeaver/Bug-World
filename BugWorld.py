@@ -1,5 +1,8 @@
 import logging
 
+logger = logging.getLogger()
+logger.setLevel(logging.ERROR)
+
 #To start working on composition structure of bugs
 
 #PGBugWorld where pygame dependent code goes
@@ -478,7 +481,7 @@ class BugWorld:  # defines the world, holds the objects, defines the rules of in
 		return wt  # return the updated transform
 
 	def get_pos_transform(x=0, y=0, z=0, theta=0):  # utility function to encapsulate translation and rotation
-		#use this anytime a transform is needed in the world.  
+		#use this anytime a transform is needed in the world.
 		#assume the angle is measured in the x,y plane around z axis
 		#it will be an absolute transform in the local x, y, theta space
 		T = [x, y, z] #create a translation matrix
@@ -487,10 +490,10 @@ class BugWorld:  # defines the world, holds the objects, defines the rules of in
 		return AFF.compose(T, R, Z)
 
 	def get_x(position):
-		return position[0][3] 
+		return position[0][3]
 
 	def get_y(position):
-		return position[1][3] 
+		return position[1][3]
 
 	def get_random_location_in_world(self):
 		x = random.randint(0, BugWorld.BOUNDARY_WIDTH)
@@ -498,22 +501,6 @@ class BugWorld:  # defines the world, holds the objects, defines the rules of in
 		z = 0
 		theta = random.uniform(0, 2*np.pi)  # orientation in radians
 		return BugWorld.get_pos_transform(x, y, z, theta)
-	
-
-
-
-#TODO
-#import logging
-#have a scale for drawing in pygame that is independent of bug kinematics
-
-
-#have a sample period so can do velocity
-
-#range
-#collisions could do damage
-#minimize energy spent
-#maximize health
-
 
 
 class Herbivore(Bug.Bug):

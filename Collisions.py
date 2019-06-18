@@ -1,5 +1,8 @@
 import logging
 
+logger = logging.getLogger()
+logger.setLevel(logging.ERROR)
+
 """
 Collision API
 
