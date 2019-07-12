@@ -9,12 +9,14 @@ import numpy as np
 import random
 import BugWorld as bw
 import Collisions as coll
+import BugPopulation as pop
 
 logger = logging.getLogger()
 logger.setLevel(logging.ERROR)
 
+
 class BugEyeHitbox(bw.BWObject):
-	def __init__(self, collisions, owner, pos_transform, size=15):
+	def __init__(self, bug_world, owner, pos_transform, size=15):
 		self.name = "EHB"
 		# position should be center of eye + radius of hitbox
 		super().__init__(pos_transform, self.name)
@@ -23,7 +25,7 @@ class BugEyeHitbox(bw.BWObject):
 		self.default_color = self.color
 		self.type = bw.BWOType.EHB
 		self.owner = owner
-		self.ci = coll.CollisionInterface(collisions, owner)
+		self.ci = coll.CollisionInterface(bug_world.collisions, owner)
 		self.ci.register_as_detector(self, coll.Collisions.VISUAL)
 
 	def update(self, base):
@@ -38,7 +40,7 @@ class BugEyeHitbox(bw.BWObject):
 
 class BugEye(bw.BWObject):
 
-	def __init__(self, collisions, owner, pos_transform, size=1):
+	def __init__(self, bug_world, owner, pos_transform, size=1):
 		self.name = "E"
 		super().__init__(pos_transform, self.name)
 		self.size = size
@@ -51,7 +53,7 @@ class BugEye(bw.BWObject):
 		# add the eye hitbox for the current eye
 		# put hitbox so tangent with eye center...actually add 1 so avoid collision with bug just for efficiency
 		self.HITBOX_LOC = bw.BugWorld.get_pos_transform((self.HITBOX_SIZE + 1), 0, 0, 0)
-		self.add_subcomponent(BugEyeHitbox(collisions, owner, self.HITBOX_LOC, self.HITBOX_SIZE))
+		self.add_subcomponent(BugEyeHitbox(bug_world, owner, self.HITBOX_LOC, self.HITBOX_SIZE))
 
 	def update(self, base):
 		# eyes don't move independent of bug, so relative pos won't change.
@@ -64,10 +66,12 @@ class BugEye(bw.BWObject):
 	'''most of these are Subcomponents because they have hitboxes'''
 
 class Bug(bw.BWObject):
+	"""Abstract base class.  All bugs in the BugWorld must be of this type"""
+
 	DEFAULT_TURN_AMT = np.deg2rad(30)  # turns are in radians
 	DEFAULT_MOVE_AMT = 5
 
-	def __init__(self, collisions, initial_pos, name="Bug"):
+	def __init__(self, bug_world, initial_pos, name="Bug", genome=None, bug_type=None):
 		super().__init__(initial_pos, name)
 		self.size = 10  # override default and set the intial radius of bug
 		self.color = bw.Color.PINK  # override default and set the initial color of a default bug
@@ -76,10 +80,17 @@ class Bug(bw.BWObject):
 		self.health = 100
 		self.score = 0  # used to reinforce behaviour.  Add to the score when does a "good" thing
 		self.owner = self
-		self.ci = coll.CollisionInterface(collisions, self.owner)
+		self._genome = genome
+		self.ci = coll.CollisionInterface(bug_world.collisions, self.owner)
 		self.ci.register_as_emitter(self, coll.Collisions.PHYSICAL)
 		self.ci.register_as_detector(self, coll.Collisions.PHYSICAL)
 		self.ci.register_as_emitter(self, coll.Collisions.VISUAL)
+		if not bug_type:
+			bug_type = bw.BWOType.BUG
+
+		self.type = bug_type
+		self.pi = pop.BugPopulationInterface(bug_world, self) # uses bug_type
+
 
 		# add the eyes for a default bug
 		# put eye center on circumference, rotate then translate.
@@ -92,8 +103,15 @@ class Bug(bw.BWObject):
 
 		self.EYE_SIZE = int(self.size * 0.50)  # set a percentage the size of the bug
 		# instantiate the eyes
-		self.add_subcomponent(BugEye(collisions, self.owner, self.RIGHT_EYE_LOC, self.EYE_SIZE))
-		self.add_subcomponent(BugEye(collisions, self.owner, self.LEFT_EYE_LOC, self.EYE_SIZE))
+		self.add_subcomponent(BugEye(bug_world, self.owner, self.RIGHT_EYE_LOC, self.EYE_SIZE))
+		self.add_subcomponent(BugEye(bug_world, self.owner, self.LEFT_EYE_LOC, self.EYE_SIZE))
+
+	def get_genome(self):
+		return self._genome
+
+	def get_fitness(self):
+		logging.error("must override fitness method to calculate appropriate fitness for a given bug")
+		return 0
 
 	def update(self, base):
 		#		self.wander() #changes the relative position
@@ -103,6 +121,13 @@ class Bug(bw.BWObject):
 
 		#update subcomponents
 		self.update_subcomponents(self.abs_position)
+
+	def kill(self):  # overridden to include bug specific stuff
+		super().kill()
+		try:
+			self.pi.deregister()  # if part of a population, deregister it
+		except:
+			pass
 
 
 ############ Movement stuff #######################

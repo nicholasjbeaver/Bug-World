@@ -1,4 +1,7 @@
 import logging
+from itertools import count
+
+from BugPopulation import BugPopulations
 
 logger = logging.getLogger()
 logger.setLevel(logging.ERROR)
@@ -97,6 +100,7 @@ import numpy as np
 import random
 
 class BWObject(PGObject):  # Bug World Object
+	"""Abstract base class.  All objects in the BugWorld must be of this type"""
 
 	#Everything is a BWObject including bug body parts (e.g., eyes, ears, noses).
 	#has a position and orientation relative to the container, which could be the world.  But it could be the body, the eye
@@ -187,6 +191,7 @@ import transforms3d.affines as AFF
 import transforms3d.euler as E
 
 import Collisions as coll
+import BugPopulation as pop
 
 #Color class so can separate out code from PG specific stuff.
 #http://www.discoveryplayground.com/computer-programming-for-kids/rgb-colors/
@@ -207,17 +212,38 @@ class Color(): #RGB values
 class BWOType:
 	''' Defines the different types of objects allowed within a Bug World '''
 
+#TODO make a dictionary so can get the text for debugging and filenames.
+
 	# use integers so it is faster for dict lookups
-	BUG = int(1)
-	HERB = int(2)  	# Herbivore
-	OMN = int(3)  	# Omnivore
-	CARN = int(4)  	# Carnivore
-	OBST = int(5)  	# Obstacle
-	MEAT = int(6)  	# Food for Carnivore and Omnivore
-	PLANT = int(7)  # Food for Herbivore and Omnivore
-	EYE = int(8)  	# for eyes
-	EHB = int(9)    # for eye hit boxes
-	OBJ = int(10)  	# catch all for the base class.  Shouldn't ever show up
+	# can use count from itertools to increment an index
+
+	ndx = count(0)  # use auto indexer so can add other objects without an error.  actual value doesn't matter
+	BUG = next(ndx)		# generic base class
+	HERB = next(ndx)  	# Herbivore
+	OMN = next(ndx)  	# Omnivore
+	CARN = next(ndx)  	# Carnivore
+	OBST = next(ndx)  	# Obstacle
+	MEAT = next(ndx)  	# Food for Carnivore and Omnivore
+	PLANT = next(ndx)	# Food for Herbivore and Omnivore
+	EYE = next(ndx)  	# for eyes
+	EHB = next(ndx)	    # for eye hit boxes
+	OBJ = next(ndx)  	# catch all for the base class.  Shouldn't ever show up
+
+	_BWONames = {	# Used to control text look up for a type so can get consistent logging and data messages
+					BUG: 'BUG',
+					HERB: 'HERB',
+					OMN: 'OMN',
+					CARN: 'CARN',
+					OBST: 'OBST',
+					MEAT: 'BUG',
+					PLANT: 'PLANT',
+					EYE: 'EYE',
+					EHB: 'EHB',
+					OBJ: 'OBJ'
+				}
+
+	def get_name(type_index):
+		return BWOType._BWONames.get(type_index)
 
 	
 class PhysicalCollisionMatrix(coll.CollisionMatrix):
@@ -227,7 +253,7 @@ class PhysicalCollisionMatrix(coll.CollisionMatrix):
 		self.collisions = collisions
 		self.collisions.set_collision_handler(coll.Collisions.PHYSICAL, self.invoke_handler)
 
-#Bug to Bug interactions
+# Bug to Bug interactions
 	def herb_omn(self, herb, omn):  # handle herbivore an omnivore collision
 		self.print_collision(herb, omn)
 		logging.info('danger there is an omnivore!')
@@ -348,7 +374,7 @@ class VisualCollisionMatrix(coll.CollisionMatrix):
 		self.collisions = collisions
 		self.collisions.set_collision_handler(coll.Collisions.VISUAL, self.invoke_handler)
 
-#Bug to Bug interactions
+# Eye to Bug interactions, i.e., when a bug sees another bug or object
 	def ehb_omn(self, ehb, omn):  # handle herbivore an omnivore collision
 		self.print_collision(ehb, omn)
 		logging.info('I see an omnivore!')
@@ -361,11 +387,21 @@ class VisualCollisionMatrix(coll.CollisionMatrix):
 		self.print_collision(ehb, carn )
 		logging.info('I see a carnivore!')
 
+	def ehb_plant(self, ehb, plant):
+		self.print_collision(ehb, plant )
+		logging.info('I see a plant!')
+
+	def ehb_meat(self, ehb, meat):
+		self.print_collision(ehb, meat )
+		logging.info('I see meat!')
+
 	def get_collision_dictionary(self):
 		cd = {  # look up which function to call when two objects of certain types collide
 			(BWOType.EHB, BWOType.OMN): self.ehb_omn,
 			(BWOType.EHB, BWOType.CARN): self.ehb_carn,
 			(BWOType.EHB, BWOType.HERB): self.ehb_herb,
+			(BWOType.EHB, BWOType.PLANT): self.ehb_plant,
+			(BWOType.EHB, BWOType.MEAT): self.ehb_meat
 		}
 		return cd
 
@@ -374,7 +410,6 @@ class VisualCollisionMatrix(coll.CollisionMatrix):
 		detector.color = emitter.color
 		owner = detector.owner
 		logging.info(owner.name + ':' + detector.name + ' saw ' + emitter.name + ' at a distance of: ' + str(round(collision_data.get("dist_sqrd"))))
-
 
 
 class BugWorld:  # defines the world, holds the objects, defines the rules of interaction
@@ -392,38 +427,88 @@ class BugWorld:  # defines the world, holds the objects, defines the rules of in
 	NUM_OBSTACLES = 20
 	IDENTITY = np.identity(4, int)
 	MAP_TO_CANVAS = [[1,0,0,0], [0,-1,0,BOUNDARY_HEIGHT], [0,0,-1,0], [0,0,0,1]]  # flip x-axis and translate origin
+	valid_population_types = {BWOType.OMN, BWOType.HERB, BWOType.CARN}  # the different types of populations allowed
 
-	WorldObjects = []
+	WorldObjects = []  # collection of all of the objects in the world
 
-#--- Instance Methods
+	_dead_objects = []  # used to store bugs that die within populations
+	_new_objects = []  # used to store bugs need to be added to the world
+
+	#TODO get rid of old bugs
+	def add_to_dead_objects(self, dead_objects_list):
+		"""call this method if a bug dies in a population."""
+		self._dead_objects.append(dead_objects_list)  # will be used to clean up
+
+	def add_to_new_objects(self, new_objects_list):  # will be used to create new objects
+		self._new_objects.append(new_objects_list)
+
+	#TODO expose this whenever a new bug is to be created
+	def world_object_factory(self, bwo_type, starting_pos=None, name=None, genome=None):
+		"""This should be used to create the main objects in the world...not subcomponents, or hitboxes"""
+
+		if bwo_type == BWOType.HERB:
+			return Herbivore(self, starting_pos, name, genome)
+
+		elif bwo_type == BWOType.CARN:
+			return Carnivore(self, starting_pos, name, genome)
+
+		elif bwo_type == BWOType.OMN:
+			return Omnivore(self, starting_pos, name, genome)
+
+		elif bwo_type == BWOType.OBST:
+			if not genome:
+				logging.error("shouldn't have a genome for an obstacle")
+			return Obstacle(self, starting_pos, name)
+
+		elif bwo_type == BWOType.MEAT:
+			if not genome:
+				logging.error("shouldn't have a genome for an meat")
+			return Meat(self, starting_pos, name)
+
+		elif bwo_type == BWOType.PLANT:
+			if not genome:
+				logging.error("shouldn't have a genome for an plant ( yet :-} )")
+			return Plant(self, starting_pos, name)
+
+		else:
+			logging.error("invalid Object Type: " + str(bwo_type))
+
+
 	def __init__(self):
+
+		self.rel_position = BugWorld.MAP_TO_CANVAS  # maps Bug World coords to the canvas coords in Pygame
+
+		#instantiate the collision system
 		self.collisions = coll.Collisions()
 		self.pcm = PhysicalCollisionMatrix(self.collisions)
 		self.vcm = VisualCollisionMatrix(self.collisions)
-		self.rel_position = BugWorld.MAP_TO_CANVAS #maps Bug World coords to the canvas coords in Pygame
-		for i in range(0, BugWorld.NUM_HERBIVORE_BUGS): #instantiate all of the Herbivores with a default name
+
+		# instantiate the populations system
+		self.populations = pop.BugPopulations(self, self.valid_population_types)
+
+		for i in range(0, BugWorld.NUM_HERBIVORE_BUGS):  # instantiate all of the Herbivores with a default name
 			start_pos = BugWorld.get_random_location_in_world(self)
-			self.WorldObjects.append(Herbivore(self.collisions, start_pos, "H" + str(i)))
+			self.WorldObjects.append(Herbivore(self, start_pos, "H" + str(i)))
 
 		for i in range(0, BugWorld.NUM_CARNIVORE_BUGS):
 			start_pos = BugWorld.get_random_location_in_world(self)
-			self.WorldObjects.append(Carnivore(self.collisions, start_pos, "C" + str(i)))
+			self.WorldObjects.append(Carnivore(self, start_pos, "C" + str(i)))
 
 		for i in range(0, BugWorld.NUM_OMNIVORE_BUGS):
 			start_pos = BugWorld.get_random_location_in_world(self)
-			self.WorldObjects.append(Omnivore(self.collisions, start_pos, "O" + str(i)))
+			self.WorldObjects.append(Omnivore(self, start_pos, "O" + str(i)))
 
 		for i in range(0, BugWorld.NUM_OBSTACLES):
 			start_pos = BugWorld.get_random_location_in_world(self)
-			self.WorldObjects.append(Obstacle(self.collisions, start_pos, "B" + str(i)))
+			self.WorldObjects.append(Obstacle(self, start_pos, "B" + str(i)))
 
 		for i in range(0, BugWorld.NUM_PLANT_FOOD ):
 			start_pos = BugWorld.get_random_location_in_world(self)
-			self.WorldObjects.append(Plant(self.collisions, start_pos, "P" + str(i)))
+			self.WorldObjects.append(Plant(self, start_pos, "P" + str(i)))
 
 		for i in range(0, BugWorld.NUM_MEAT_FOOD):
 			start_pos = BugWorld.get_random_location_in_world(self)
-			self.WorldObjects.append(Meat(self.collisions, start_pos, "M" + str(i)))
+			self.WorldObjects.append(Meat(self, start_pos, "M" + str(i)))
 
 	def update(self):
 		for BWO in self.WorldObjects:
@@ -438,6 +523,8 @@ class BugWorld:  # defines the world, holds the objects, defines the rules of in
 	
 	def post_collision_processing(self):
 		#loop through objects and delete them, convert them etc.
+		#TODO call post_collisions_processing on all of the populations and then process dead_bug list
+		#TODO add add new bugs created by reproduction
 		#if health < 0, delete.
 		#if was a bug, convert it to meat
 		#if it was a plant, just delete it
@@ -451,16 +538,23 @@ class BugWorld:  # defines the world, holds the objects, defines the rules of in
 				delete_list.append(wo)
 
 				# if it is a bug, then add a meat object to the same location
-				if wo.type in { BWOType.HERB, BWOType.OMN, BWOType.CARN }:
+				if wo.type in {BWOType.HERB, BWOType.OMN, BWOType.CARN}:
 					start_pos = wo.get_rel_position()  # get location of the dead bug
-					working_list.append(Meat(self.collisions, start_pos, "M-"+ wo.name  )) #create a meat object at same location
+					working_list.append(Meat(self, start_pos, "M-" + wo.name)) # create a meat object at same location
 			else:  # copy the object over to the working list
 				working_list.append(wo)
 
 		self.WorldObjects = working_list  # copy working list back over to the WorldObjects
 
-		for dl in delete_list: #call the kill method on each object that was marked for deletion.  That will deregister it and clean up
+		# call the kill method on each object that was marked for deletion.
+		# That will deregister from collisions it and clean up from the population
+		for dl in delete_list:
 			dl.kill()
+
+	def kill_em_all(self):  # ...and let the garbage collector sort them out.  This deletes all of the objs, collisions etc
+		#TODO implement this once you put it into the main loop
+		pass
+
 
 #----- Utility Class Methods ----------------
 
@@ -502,69 +596,64 @@ class BugWorld:  # defines the world, holds the objects, defines the rules of in
 		theta = random.uniform(0, 2*np.pi)  # orientation in radians
 		return BugWorld.get_pos_transform(x, y, z, theta)
 
+# ------------- definitions of all of the objects in the world --------------------
+
 
 class Herbivore(Bug.Bug):
-	def __init__ (self, collisions, starting_pos, name="HERB"):
-		super().__init__(collisions, starting_pos, name )
+	def __init__ (self, bug_world, starting_pos, name="HERB", genome=None):
+		super().__init__(bug_world, starting_pos, name, genome, bug_type=BWOType.HERB )
 		self.color = Color.GREEN
 		self.default_color = self.color
-		self.type = BWOType.HERB
-
 
 class Omnivore(Bug.Bug):
-	def __init__(self, collisions, starting_pos, name="OMN"):
-		super().__init__(collisions, starting_pos, name )
+	def __init__(self, bug_world, starting_pos, name="OMN", genome=None):
+		super().__init__(bug_world, starting_pos, name, genome, bug_type=BWOType.OMN )
 		self.color = Color.ORANGE
 		self.default_color = self.color
-		self.type = BWOType.OMN
 
 
 class Carnivore(Bug.Bug):
-	def __init__(self, collisions, starting_pos, name="CARN"):
-		super().__init__(collisions, starting_pos, name )
+	def __init__(self, bug_world, starting_pos, name="CARN", genome=None):
+		super().__init__(bug_world, starting_pos, name, genome, bug_type=BWOType.CARN)
 		self.color = Color.RED
 		self.default_color = self.color
-		self.type = BWOType.CARN
 
 
 class Obstacle(BWObject):
-	def __init__ (self, collisions, starting_pos, name="OBST"):
+	def __init__ (self, bug_world, starting_pos, name="OBST"):
 		super().__init__(starting_pos, name )
 		self.color = Color.YELLOW
 		self.default_color = self.color
 		self.type = BWOType.OBST
 		self.size = 7
 		self.health = 100
-		self.ci = coll.CollisionInterface(collisions, self)
+		self.ci = coll.CollisionInterface(bug_world.collisions, self)
 		self.ci.register_as_emitter(self, coll.Collisions.PHYSICAL)
 		self.ci.register_as_emitter(self, coll.Collisions.VISUAL)
 
 
 class Meat(BWObject):
-	def __init__ (self, collisions, starting_pos, name ="MEAT"):
+	def __init__ (self, bug_world, starting_pos, name ="MEAT"):
 		super().__init__(starting_pos, name )
 		self.color = Color.BROWN
 		self.default_color = self.color
 		self.type = BWOType.MEAT
 		self.size = 10
 		self.health = 100
-		self.ci = coll.CollisionInterface(collisions, self)
+		self.ci = coll.CollisionInterface(bug_world.collisions, self)
 		self.ci.register_as_emitter(self, coll.Collisions.PHYSICAL)
 		self.ci.register_as_emitter(self, coll.Collisions.VISUAL)
 
 
 class Plant(BWObject):
-	def __init__(self, collisions, starting_pos, name="PLANT"):
+	def __init__(self, bug_world, starting_pos, name="PLANT"):
 		super().__init__(starting_pos, name )
 		self.color = Color.DARK_GREEN
 		self.default_color = self.color
 		self.type = BWOType.PLANT
 		self.size = 5
 		self.health = 100
-		self.ci = coll.CollisionInterface(collisions, self)
+		self.ci = coll.CollisionInterface(bug_world.collisions, self)
 		self.ci.register_as_emitter(self, coll.Collisions.PHYSICAL)
 		self.ci.register_as_emitter(self, coll.Collisions.VISUAL)
-
-
-
 
