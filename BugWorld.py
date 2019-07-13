@@ -1,12 +1,17 @@
 import logging
+import numpy as np
+import random
 from itertools import count
 
-from BugPopulation import BugPopulations
+#Going to use 3D matrices even if in 2d
+#See http://matthew-brett.github.io/transforms3d/ for details on the lib used
+#Object's local coord frame is in the x,y plane and faces in the x direction.
+#Positive rotation follow RHR, x-axis into the y-axis...so z is up.
+import transforms3d.affines as AFF
+import transforms3d.euler as E
 
 logger = logging.getLogger()
 logger.setLevel(logging.ERROR)
-
-#To start working on composition structure of bugs
 
 #PGBugWorld where pygame dependent code goes
 #contains draw code
@@ -41,69 +46,75 @@ class PGObject():
 		return 0
 
 
-#world for simulations to happen 
-#has boundaries
-#has objects
-#	- determines which type
-#	- determines where and when
+# world for simulations to happen
+#	- has boundaries
+#	- has objects
+#		- determines which type
+#		- determines where and when
 #	- kills objects
 #	- determines rules for affecting object attributes (health, mutating, mating)
 
+# objects register for different types of collisions (physical, sound, smell, light(RGB))
+# senses are modeled as a collision between sensory hitbox and stimulus
+# 	(e.g., eye hit box collides with bug body visual emittter
+# contains rules of interactions between objects
+# how do bugs die
 
-#objects register for different types of collisions (physical, sound, smell, light(RGB))
 #objects have hitboxes for each sensor.
 
+# Phase 1
+# objects have physical collision...bodies collide with other solid bodies
+# eye hitboxes collide with objects that emit visual data and extracts RGB values from the target object .color tuple
 
-#objects emit sound (varies on speed)
-#objects emit smell
-#objects have physical collision
-#objects have smell collision
-#objects have sound collision
-#eyes collide with objects and extracts RGB values from the target object .color tuple
-#eye collision also gives distance
-#bodies collide with other solid bodies
+# Phase 1b
+# Need an energy system
+	# controls whether starves
+	# consume energy based on speed
+	# speed driven by amount of energy
 
+# Phase 1c - Implement Genetic Algorithm
+
+# Phase 2
+# objects emit sound (varies on speed)
+# objects emit smell
+# objects have smell collision
+# objects have sound collision
+# eye collision also gives distance and possibly object type (so brain doesn't have to learn)
+
+
+# Phase 3
 # has the sample time which is the update loop time...used for velocity and acceleration
+# extended collisions
+# 	- different hitbox shapes.  Hitbox needed for eyes so that collisions can be detected
+# 		in field of vision (use circles to start for everything.  Could use cones for vision eventually)
+# 	- should return "distance" so can be used for intensity
+# 	- returns an intensity of collision (for eye interaction with light, sound, smell)
 
-#detects collisions
-#	- different hitbox shapes.  Hitbox needed for eyes so that collisions can be detected
-#		in field of vision (use circles to start for everything.  Could use cones for vision eventually)
-#	- should return "distance" so can be used for intensity
-#	- returns an intensity of collision (for eye interaction with light, sound, smell)
 
+# Genetic Algorithm
+# have a score that indicates successfulness (distance travelled, area covered, energy amount \
+# 	(expended moving, gained eating) this score will be used as the fitness function
+# how do bugs reproduce (should we use the "weakest 500" to avoid extinction events)
+# need global counters so can do rates to keep populations stable.
+# 	Iterations/generations/epoch:can be used to create extinction events in so many cycles
 
-#contains rules of interactions
-#how do bugs die
-#have a score that indicates successfulness (distance travelled, area covered, energy amount (expended moving, gained eating) )
-#how do bugs reproduce (should we use the "weakest 500" to avoid extinction events)
-
-#need global counters so can do rates to keep populations stable.
-#timer
+# Need a timer to schedule events
 	#controls rates like food introduction, mating
 	#creates extinction events
 
-#Iterations/generations/epoch:
-	#can be used to create extinction events in so many cycles
+# For Reinforcement Learning
+# Need a point system to keep track of goal reinforcement
+	# points for distance travelled (would incent to move.  otherwise would just sit still to max energy/health)
+	# points for time alive
+	# points for food eaten
+	# could use energy and health
 
-#Need a point system to keep track of goal reinforcement
-	#points for distance travelled (would incent to move.  otherwise would just sit still to max energy/health)
-	#points for time alive
-	#points for food eaten
-	#could use energy and health
-
-#Need an energy system
-	#controls whether starves
-	#consume energy based on speed
-	#speed driven by amount of energy
-
-import numpy as np
-import random
 
 class BWObject(PGObject):  # Bug World Object
 	"""Abstract base class.  All objects in the BugWorld must be of this type"""
 
-	#Everything is a BWObject including bug body parts (e.g., eyes, ears, noses).
-	#has a position and orientation relative to the container, which could be the world.  But it could be the body, the eye
+	#Everything is a BWObject including bug body parts (e.g., eyes, ears, noses) and non bug inanimate objects.
+	#has a position and orientation relative to the container, which could be the world.
 	#has a color
 	#has a size
 	#has a name
@@ -113,8 +124,8 @@ class BWObject(PGObject):  # Bug World Object
 
 
 	def __init__(self, starting_pos, name="BWOBject"):
-		self.rel_position = starting_pos
-		self.abs_position = starting_pos
+		self.rel_position = starting_pos  # relative the position that holds it (e.g., it is a subcomponent of a bug)
+		self.abs_position = starting_pos  # absolute position in the BugWorld
 		self.name = name
 		self.size = 1  # default...needs to be overridden
 		self.color = Color.BLACK  # default...needs to be overridden
@@ -150,7 +161,7 @@ class BWObject(PGObject):  # Bug World Object
 
 	def update(self, base):
 		# eyes don't move independent of bug, so relative pos won't change.
-		self.set_abs_position(base) #update it based on the passed in ref frame
+		self.set_abs_position(base)  # update it based on the passed in ref frame
 		self.update_subcomponents(self.abs_position)
 
 	def update_subcomponents(self, base):
@@ -170,6 +181,7 @@ class BWObject(PGObject):  # Bug World Object
 		self._subcomponents.append(bwo)
 
 	def kill(self):
+		"""this is necessary to make sure all of subcomponents and interfaces are cleaned up"""
 		self.kill_subcomponents()
 		try:
 			self.ci.deregister_all()
@@ -182,16 +194,9 @@ class BWObject(PGObject):  # Bug World Object
 
 
 import Bug
-
-#Going to use 3D matrices even if in 2d
-#See http://matthew-brett.github.io/transforms3d/ for details on the lib used
-#Object's local coord frame is in the x,y plane and faces in the x direction.  
-#Positive rotation follow RHR, x-axis into the y-axis...so z is up.
-import transforms3d.affines as AFF 
-import transforms3d.euler as E
-
 import Collisions as coll
 import BugPopulation as pop
+
 
 #Color class so can separate out code from PG specific stuff.
 #http://www.discoveryplayground.com/computer-programming-for-kids/rgb-colors/
@@ -210,7 +215,7 @@ class Color(): #RGB values
 
 
 class BWOType:
-	''' Defines the different types of objects allowed within a Bug World '''
+	""" Defines the different types of objects allowed within a Bug World"""
 
 #TODO make a dictionary so can get the text for debugging and filenames.
 
@@ -224,12 +229,12 @@ class BWOType:
 	CARN = next(ndx)  	# Carnivore
 	OBST = next(ndx)  	# Obstacle
 	MEAT = next(ndx)  	# Food for Carnivore and Omnivore
-	PLANT = next(ndx)	# Food for Herbivore and Omnivore
+	PLANT = next(ndx)  	# Food for Herbivore and Omnivore
 	EYE = next(ndx)  	# for eyes
 	EHB = next(ndx)	    # for eye hit boxes
 	OBJ = next(ndx)  	# catch all for the base class.  Shouldn't ever show up
 
-	_BWONames = {	# Used to control text look up for a type so can get consistent logging and data messages
+	_BWONames = {  	# Used to control text look up for a type so can get consistent logging and data messages
 					BUG: 'BUG',
 					HERB: 'HERB',
 					OMN: 'OMN',
@@ -247,6 +252,7 @@ class BWOType:
 
 	
 class PhysicalCollisionMatrix(coll.CollisionMatrix):
+	"""This class controls what happens when objects physcialy collide"""
 
 	def __init__(self, collisions):
 		super().__init__(self.get_collision_dictionary())
@@ -367,7 +373,9 @@ class PhysicalCollisionMatrix(coll.CollisionMatrix):
 		}
 		return cd
 
+
 class VisualCollisionMatrix(coll.CollisionMatrix):
+	"""This class controls what happens when a bug's eye hit box collides with something that emits visual info"""
 
 	def __init__(self, collisions):
 		super().__init__(self.get_collision_dictionary())
@@ -414,23 +422,28 @@ class VisualCollisionMatrix(coll.CollisionMatrix):
 
 class BugWorld:  # defines the world, holds the objects, defines the rules of interaction
 
-# --- Class Constants
+	# World Constants used to define the size of the world and for drawing the screen
 	BOUNDARY_WIDTH = 800
 	BOUNDARY_HEIGHT = 600
-	BOUNDARY_WRAP = True
+	BOUNDARY_WRAP = True  # controls whether bugs go off one side and enter the other (WRAP), or hit a wall
 
+	# controls the initial number of objects in the World
 	NUM_CARNIVORE_BUGS = 10
 	NUM_OMNIVORE_BUGS = 15
 	NUM_HERBIVORE_BUGS = 20
 	NUM_PLANT_FOOD = 20
 	NUM_MEAT_FOOD = 1
 	NUM_OBSTACLES = 20
-	IDENTITY = np.identity(4, int)
+
+	IDENTITY = np.identity(4, int)  # make a specific version in case change dimension from 3 to 2
 	MAP_TO_CANVAS = [[1,0,0,0], [0,-1,0,BOUNDARY_HEIGHT], [0,0,-1,0], [0,0,0,1]]  # flip x-axis and translate origin
+
+	# used to control what types of objects will be controlled by the population interface
 	valid_population_types = {BWOType.OMN, BWOType.HERB, BWOType.CARN}  # the different types of populations allowed
 
 	WorldObjects = []  # collection of all of the objects in the world
 
+	#TODO need to dynamically modify the different types of objects
 	_dead_objects = []  # used to store bugs that die within populations
 	_new_objects = []  # used to store bugs need to be added to the world
 
@@ -448,31 +461,24 @@ class BugWorld:  # defines the world, holds the objects, defines the rules of in
 
 		if bwo_type == BWOType.HERB:
 			return Herbivore(self, starting_pos, name, genome)
-
 		elif bwo_type == BWOType.CARN:
 			return Carnivore(self, starting_pos, name, genome)
-
 		elif bwo_type == BWOType.OMN:
 			return Omnivore(self, starting_pos, name, genome)
-
 		elif bwo_type == BWOType.OBST:
 			if not genome:
 				logging.error("shouldn't have a genome for an obstacle")
 			return Obstacle(self, starting_pos, name)
-
 		elif bwo_type == BWOType.MEAT:
 			if not genome:
 				logging.error("shouldn't have a genome for an meat")
 			return Meat(self, starting_pos, name)
-
 		elif bwo_type == BWOType.PLANT:
 			if not genome:
 				logging.error("shouldn't have a genome for an plant ( yet :-} )")
 			return Plant(self, starting_pos, name)
-
 		else:
 			logging.error("invalid Object Type: " + str(bwo_type))
-
 
 	def __init__(self):
 
@@ -556,7 +562,7 @@ class BugWorld:  # defines the world, holds the objects, defines the rules of in
 		pass
 
 
-#----- Utility Class Methods ----------------
+	# ----- Utility Class Methods ----------------
 
 	def adjust_for_boundary(wt):  # adjust an inputed transform to account for world boundaries and wrap
 		if BugWorld.BOUNDARY_WRAP:
@@ -596,14 +602,14 @@ class BugWorld:  # defines the world, holds the objects, defines the rules of in
 		theta = random.uniform(0, 2*np.pi)  # orientation in radians
 		return BugWorld.get_pos_transform(x, y, z, theta)
 
+
 # ------------- definitions of all of the objects in the world --------------------
-
-
 class Herbivore(Bug.Bug):
 	def __init__ (self, bug_world, starting_pos, name="HERB", genome=None):
 		super().__init__(bug_world, starting_pos, name, genome, bug_type=BWOType.HERB )
 		self.color = Color.GREEN
 		self.default_color = self.color
+
 
 class Omnivore(Bug.Bug):
 	def __init__(self, bug_world, starting_pos, name="OMN", genome=None):

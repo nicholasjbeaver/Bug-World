@@ -1,12 +1,8 @@
 
-
-#break out utility methods
-#factor code into modules for import
-#global values for visibility
-
 import logging
 import numpy as np
 import random
+
 import BugWorld as bw
 import Collisions as coll
 import BugPopulation as pop
@@ -16,6 +12,8 @@ logger.setLevel(logging.ERROR)
 
 
 class BugEyeHitbox(bw.BWObject):
+	"""This object is mounted on an eye so it can be offset and larger than the physical eye"""
+
 	def __init__(self, bug_world, owner, pos_transform, size=15):
 		self.name = "EHB"
 		# position should be center of eye + radius of hitbox
@@ -60,16 +58,21 @@ class BugEye(bw.BWObject):
 		self.set_abs_position(base) #update it based on the passed in ref frame
 		self.update_subcomponents(self.abs_position)
 
-	'''Bug is made up of different parts'''
-	'''body, left eye, right eye, left ear, right ear, antenna, nose, gland (to emit odor), speaker (to emit sound)
-		display text'''
-	'''most of these are Subcomponents because they have hitboxes'''
 
 class Bug(bw.BWObject):
-	"""Abstract base class.  All bugs in the BugWorld must be of this type"""
+	"""Abstract base class.  All bugs in the BugWorld must be of this type
+		Bug is made up of different parts:
+		body, left eye, right eye,
 
-	DEFAULT_TURN_AMT = np.deg2rad(30)  # turns are in radians
-	DEFAULT_MOVE_AMT = 5
+		Phase 2
+			left ear, right ear, antenna, nose, gland (to emit odor), speaker (to emit sound)
+		Phase 3
+			display text
+
+		most of these are Subcomponents because they have hitboxes"""
+
+	DEFAULT_TURN_AMT = np.deg2rad(30)  	# turns are in radians, used for random moving
+	DEFAULT_MOVE_AMT = 5				# used for random moving
 
 	def __init__(self, bug_world, initial_pos, name="Bug", genome=None, bug_type=None):
 		super().__init__(initial_pos, name)
@@ -80,20 +83,23 @@ class Bug(bw.BWObject):
 		self.health = 100
 		self.score = 0  # used to reinforce behaviour.  Add to the score when does a "good" thing
 		self.owner = self
-		self._genome = genome
-		self.ci = coll.CollisionInterface(bug_world.collisions, self.owner)
-		self.ci.register_as_emitter(self, coll.Collisions.PHYSICAL)
-		self.ci.register_as_detector(self, coll.Collisions.PHYSICAL)
-		self.ci.register_as_emitter(self, coll.Collisions.VISUAL)
-		if not bug_type:
-			bug_type = bw.BWOType.BUG
+		self._genome = genome  # used for the genetic algorithm
 
+		if not bug_type:  # if none passed it, set it to default
+			bug_type = bw.BWOType.BUG
 		self.type = bug_type
+
+		# participate in the collision system
+		self.ci = coll.CollisionInterface(bug_world.collisions, self.owner)
+		self.ci.register_as_emitter(self, coll.Collisions.PHYSICAL)  	# can be hit
+		self.ci.register_as_detector(self, coll.Collisions.PHYSICAL) 	# can detect hitting something
+		self.ci.register_as_emitter(self, coll.Collisions.VISUAL)		# can be seen
+
+		# participate in the population system.
 		self.pi = pop.BugPopulationInterface(bug_world, self) # uses bug_type
 
-
 		# add the eyes for a default bug
-		# put eye center on circumference, rotate then translate.
+		# put eye center on circumference of bug body, rotate then translate.
 		rT = bw.BugWorld.get_pos_transform(0, 0, 0, np.deg2rad(-30))
 		tT = bw.BugWorld.get_pos_transform(self.size, 0, 0, 0)
 		self.RIGHT_EYE_LOC = np.matmul(rT, tT)
@@ -102,6 +108,7 @@ class Bug(bw.BWObject):
 		self.LEFT_EYE_LOC = np.matmul(rT, tT)
 
 		self.EYE_SIZE = int(self.size * 0.50)  # set a percentage the size of the bug
+
 		# instantiate the eyes
 		self.add_subcomponent(BugEye(bug_world, self.owner, self.RIGHT_EYE_LOC, self.EYE_SIZE))
 		self.add_subcomponent(BugEye(bug_world, self.owner, self.LEFT_EYE_LOC, self.EYE_SIZE))
@@ -114,12 +121,11 @@ class Bug(bw.BWObject):
 		return 0
 
 	def update(self, base):
-		#		self.wander() #changes the relative position
-		#		self.move_forward( 1 )
+		# TODO implement the brain interface to control motion here
 		self.kinematic_wander()
 		self.set_abs_position(base)
 
-		#update subcomponents
+		# update subcomponents
 		self.update_subcomponents(self.abs_position)
 
 	def kill(self):  # overridden to include bug specific stuff
@@ -130,9 +136,9 @@ class Bug(bw.BWObject):
 			pass
 
 
-############ Movement stuff #######################
+	############ Movement stuff #######################
 	def move_forward(self, amount_to_move=DEFAULT_MOVE_AMT):
-		# assume bug's 'forward' is along the x direction in local coord frame
+		# assume bug's 'forward' is along the x direction in the bug's local coord frame
 		tM = bw.BugWorld.get_pos_transform(x=amount_to_move, y=0, z=0, theta=0)  # create an incremental translation
 		self.set_rel_position(np.matmul(self.rel_position, tM))  # update the new position
 
@@ -145,6 +151,7 @@ class Bug(bw.BWObject):
 		self.turn_left(-theta)
 
 	def wander(self):
+		"""this method deprecated. use the kinematics of the bug instead"""
 		rand_x = random.randint(0, Bug.DEFAULT_MOVE_AMT)
 		rand_theta = random.uniform(-Bug.DEFAULT_TURN_AMT, Bug.DEFAULT_TURN_AMT)
 		wM = bw.BugWorld.get_pos_transform(x=rand_x, y=0, z=0, theta=rand_theta)  # create an incremental movement

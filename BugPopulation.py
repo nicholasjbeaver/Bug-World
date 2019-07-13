@@ -53,15 +53,16 @@ BugPopulationInterface -- a bug must implement this interface to participate in 
 
 
 # a bug knows what population is belongs to because it is based off its type
-# this hides all of the interaction with populations
+# this hides all of the interaction with populations system
 
 class BugPopulationInterface:
-	"""" A bug must implement this interface to participate in a population. \
-		This will control what population the bug is part of and will register, deregister appropriately"""
+	""""A bug must implement this interface to participate in a population. \
+		This will control what population the bug is part of and will register, deregister with the appropriate \
+		population"""
 
 	def __init__(self, bug_world, owner_bug):
-		"""	bug_world is where bug lives \
-		    owner_bug is the bug that owns this interface"""
+		"""	bug_world: is where bug lives \
+			owner_bug: is the bug that owns this interface"""
 
 		self._bug_world = bug_world
 		self._owner_bug = owner_bug
@@ -76,31 +77,35 @@ class BugPopulationInterface:
 	def deregister(self):
 		self._pop.deregister(self._owner_bug)
 
-# Maybe use some BugWorldPopulation base class for all objs?  i.e., move plants and meat to a diff pop?
+#TODO Maybe use some BugWorldPopulation base class for all objs?  i.e., move plants and meat to a diff pop?
+
 class BugPopulation:
 	"""A BugPopulation holds all of the bugs of a given bug type e.g., OMN, CARN, HERB"""
 
-	_pop_objects = [] # list of all of the bugs in the population.
+	_pop_objects = []  # list of all of the bugs in the population.
 
 	#TODO utilize the NEAT genomes here eventually
-	_genomes = [] # this will be used to genomes if need be
+	_genomes = []  # this will be used to genomes if need be
 
-	_bug_number = count(0)  #TODO used to give a unique number to a bug in a population.
+	_bug_number = count(0)  # TODO used to give a unique number to a bug in a population.
 	# usage i = next(_bug_number)
 
 	def __init__(self, config, pop_type):
-		""" config is the NEAT config
-		 	pop_type: is the type of this population
-		 	callback to BugWorld needed? """
+		""" config: is the NEAT config	\
+			pop_type: is the type of this population"""
+		#TODO add a bug_world for a call back so can instruct to add or delete a bug
 		self._config = config
 		self._pop_type = pop_type
 
 	def add_to_population(self, bug):
-		self._pop_objects.append(bug)
+		if bug not in self._pop_objects:  # make sure is only added once
+			self._pop_objects.append(bug)
 
 	def del_from_population(self, bug):
+		"""search for the bug within the population and remove it without deleting the object. \
+			This should be called when the bug is killed"""
+
 		# find object in list and remove it
-		# should be called in the destructor method so that it is removed from all lists
 		# See article: https://stackoverflow.com/questions/1207406/how-to-remove-items-from-a-list-while-iterating
 		# somelist[:] = [x for x in somelist if not determine(x)]
 		self._pop_objects = [po for po in self._pop_objects if not po == bug]
@@ -151,7 +156,7 @@ class BugPopulation:
 
 
 class BugPopulations:
-	"""This contains all of the different populations in a given BugWOrld"""
+	"""This contains all of the different populations in a given BugWorld"""
 	# TODO store the config file names for each population, if not supplied use a default
 	# read in and store the config params for each population
 
@@ -159,8 +164,8 @@ class BugPopulations:
 	populations = {}
 
 	def __init__(self, bug_world, valid_bug_types):
-		"""	bug_world: is the owner
-			valid_bug_types: is a list of all of the valid populations that will be created"""
+		"""	bug_world: is the owner \
+			valid_bug_types: is a list of all of the valid populations that will be created. Assumes is valid BWOType"""
 
 		self._bug_world = bug_world  # call back handle to the BugWorld that holds the populations
 		self._valid_types = valid_bug_types  # these are the valid bug types.  a population will be created for each one
@@ -218,11 +223,8 @@ class BugPopulations:
 		return config
 
 
-
 # direct copy from the neat population code for reference...it isn't used ----------------------------------------------
 '''
-
-
 """Implements the core evolution algorithm."""
 
 from neat.reporting import ReporterSet
