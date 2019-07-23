@@ -1,8 +1,9 @@
 
 import os
 import logging
-import neat
-from itertools import count
+import math
+import neat as NEAT
+from neat.math_util import mean
 
 import BugWorld as bw
 '''
@@ -56,19 +57,53 @@ BugPopulationInterface -- a bug must implement this interface to participate in 
 # this hides all of the interaction with populations system
 
 class BugPopulationInterface:
-	""""A bug must implement this interface to participate in a population. \
-		This will control what population the bug is part of and will register, deregister with the appropriate \
+	""""A bug must implement this interface to participate in a population.
+		This will control what population the bug is part of and will register, deregister with the appropriate
 		population"""
 
-	def __init__(self, bug_world, owner_bug):
+	def __init__(self, bug_world, owner_bug, genome=None):
 		"""	bug_world: is where bug lives \
 			owner_bug: is the bug that owns this interface"""
 
 		self._bug_world = bug_world
 		self._owner_bug = owner_bug
+		self._genome = genome
 
 		# populations will use the owner_bug.type to try to add it to the correct population
-		self._pop = bug_world.populations.register(owner_bug) #save the pop to make it easier later
+		# assumes the populations interface has been already created on the World
+		self._pop = bug_world.populations.register(owner_bug) # save the population  to make it easier later
+
+		if self._genome is None:
+			self._genome = self._pop.get_new_genome()  	# genomes are specific to a given population.
+														# This will be handed to the brain interface to create the brain
+														# and use by NEAT for reproduction.
+
+	def get_genome(self):
+		if self._genome is None:
+			logging.error("genome was never initialized for: " + self._owner_bug.name)
+			exit(0)
+
+		# The NEAT libraries use dictionaries of genomes.  So they are stored and retrieved as such.
+		for genome_id, genome in self._genome.items():
+			genome.fitness = self.calc_fitness()  # make sure the fitness is updated before used for reproduction
+
+		return self._genome  # this should be a NEAT genome dictionary
+
+	def am_i_in_this_list(self, genome_keys):
+		if self._genome is None:
+			logging.error("genome was never initialized for: " + self._owner_bug.name)
+			exit(0)
+
+		# The NEAT libraries use dictionaries of genomes.  So they are stored and retrieved as such.
+		for genome_id, genome_obj in self._genome.items():
+			return genome_id in genome_keys
+
+	def calc_fitness(self):
+		# this where we decide what makes a good bug. By default, it will use owner_bugs method
+		# this should reside on the bug class
+		# fitness is used for NEAT algorithm
+		# it is stored on the genome in the NEAT api
+		return self._owner_bug.calc_fitness()
 
 	def get_population_config(self):  # will be used so NEAT config items can be used to create brains
 		return self._pop.get_config()
@@ -77,25 +112,81 @@ class BugPopulationInterface:
 	def deregister(self):
 		self._pop.deregister(self._owner_bug)
 
-#TODO Maybe use some BugWorldPopulation base class for all objs?  i.e., move plants and meat to a diff pop?
 
+#TODO Maybe use some BugWorldPopulation base class for all objs?  i.e., move plants and meat to a diff pop?
 class BugPopulation:
 	"""A BugPopulation holds all of the bugs of a given bug type e.g., OMN, CARN, HERB"""
 
-	_pop_objects = []  # list of all of the bugs in the population.
+	# This is a complete re-write of the NEAT Population interface
 
-	#TODO utilize the NEAT genomes here eventually
-	_genomes = []  # this will be used to genomes if need be
+	_pop_objects = []  # list of all of the bugs in the population. if use unique key could make it a dict
 
-	_bug_number = count(0)  # TODO used to give a unique number to a bug in a population.
-	# usage i = next(_bug_number)
-
-	def __init__(self, config, pop_type):
+	def __init__(self, NEAT_config, pop_type):
 		""" config: is the NEAT config	\
 			pop_type: is the type of this population"""
+
 		#TODO add a bug_world for a call back so can instruct to add or delete a bug
-		self._config = config
 		self._pop_type = pop_type
+
+		# call all of the specific NEAT related initializations
+		self.NEAT_init(NEAT_config)
+
+	def NEAT_init(self, config):
+		"""To hold all of the NEAT library specific.  Copied from the NEAT Population module"""
+
+		# create the NEAT specific classes required, Stagnation, Reproduction, Species
+		self.reporters = NEAT.reporting.ReporterSet()
+		self.config = config
+		self.stagnation = config.stagnation_type(config.stagnation_config, self.reporters)
+		self.reproduction = config.reproduction_type(config.reproduction_config,
+													 self.reporters,
+													 self.stagnation)
+		if config.fitness_criterion == 'max':
+			self.fitness_criterion = max
+		elif config.fitness_criterion == 'min':
+			self.fitness_criterion = min
+		elif config.fitness_criterion == 'mean':
+			self.fitness_criterion = mean
+		elif not config.no_fitness_termination:
+			raise RuntimeError(
+				"Unexpected fitness_criterion: {0!r}".format(config.fitness_criterion))
+
+		self.species = config.species_set_type(config.species_set_config, self.reporters)
+		self.generation = 0
+
+	def	NEAT_run(self):
+
+		#Taken from the NEAT code in population module
+
+		# collect all of the genomes because NEAT assumes a dictionary
+		curr_genomes = self.gather_genomes()
+
+		# speciate
+		self.species.speciate(self.config, curr_genomes, self.generation)
+
+		# reproduce
+		# Create the next generation from the current generation.
+		new_genomes = self.reproduction.reproduce(self.config, self.species,
+														self.config.pop_size, self.generation)
+		# increase the generation
+		self.generation += 1
+
+		return new_genomes
+
+	def get_new_genome(self):
+		# Create a new gene using NEAT interface
+		genomes = self.reproduction.create_new(self.config.genome_type,
+											self.config.genome_config,
+											num_genomes=1)
+		return genomes
+
+	def gather_genomes(self):
+		# since NEAT works on a dictionary of genomes, put them in a form that can be passed
+		genomes = {}
+		for pop_obj in self._pop_objects:  # loop through the current bug population
+			genomes.update(pop_obj.pi.get_genome())
+		return genomes
+
 
 	def add_to_population(self, bug):
 		if bug not in self._pop_objects:  # make sure is only added once
@@ -110,25 +201,33 @@ class BugPopulation:
 		# somelist[:] = [x for x in somelist if not determine(x)]
 		self._pop_objects = [po for po in self._pop_objects if not po == bug]
 
-	def prune_population(self, new_genomes):  #TODO this will be used to adjust the population after reproduction
+	def prune_population(self, new_genomes):
+		"""new_genomes: is a dictionary with all of the genomes that are to be in the updated population. \
+			This includes ones that already exist.  It does not include genomes from the current population that \
+			are to be removed"""
+
 		# genomes have GUID within a population so can use as a key
 		objs_to_del = []
 		objs_to_add = []
 
-		for pop_obj in self._pop_objects:  # loop through the current bug population
-			#  if pop_obj.get_genome in new_genomes:  # it will stay in next population so don't need to do anything
-				# pass  # this logic is covered in the next for loop section
+		old_genomes = self.gather_genomes()  # Get the current genomes in the population
 
-			if pop_obj.get_genome() not in new_genomes:  # if current bug isn't in the proposed new pop, then its gotta go
+		# create sets of the keys from the dictionaries
+		old_set = set(old_genomes)  # this includes all of the genomes from the old population
+		new_set = set(new_genomes)  # this includes all of the genomes that are to make up the new population
+		keep_set = old_set.intersection(new_set)   # if it exists in old set and new set then keep it
+		delete_set = old_set.difference(keep_set)  # get a list of genomes that aren't in the new set
+		add_set = new_set.difference(keep_set)     # get a list of genomes that weren't in the old set
+
+		for pop_obj in self._pop_objects:  # loop through the current bug population
+			if pop_obj.pi.am_i_in_this_list(delete_set):  # if current bug is to be deleted
 				# add to list of bugs go be deleted to pass back to the world
 				objs_to_del.append(pop_obj)
 
-		for new_genome in new_genomes:  # loop through all of the genomes proposed for next population
-			for pop_obj in self._pop_objects:  # loop through all bugs in current population
-				if new_genome == pop_obj.get_genome():  # if it is found, then it will stay in next population
-					break # break out of the inner for loop because it is found
-
-			objs_to_add.append((self._pop_type, new_genome ))  	# if it hasn't been found, then
+		for key_id in add_set:  # loop through all that are to be added and create a list of genomes to add
+			genome_obj = new_genomes[key_id]
+			genome_dict = {key_id:genome_obj}  # create a one entry dictionary
+			objs_to_add.append((self._pop_type, genome_dict))  	# if it hasn't been found, then
 																# add new_genome to the list of bugs to create
 
 		# should pass back a list of bugs need to be removed from the world.
@@ -136,19 +235,10 @@ class BugPopulation:
 
 		return objs_to_del, objs_to_add
 
-	def calc_fitness(self):  # TODO will need for the reproduction
-		# this where we decide what makes a good bug.  Maybe we should have different fitness by bug type
-		# this should reside on the bug class
-		# fitness is used for NEAT algorithm
-		# it is stored on the genome in the NEAT api
-		pass
-
-	def gather_genomes(self): # TODO create genomes in the form that the NEAT library expects
-		# since NEAT works on a group of genomes, put them in a form that can be passed
-		genomes = []
-		for pop_obj in self._pop_objects:  # loop through the current bug population
-			genomes.append(pop_obj.get_genome())
-		return genomes
+	def reproduce(self):
+		new_genomes = self.NEAT_run()
+		objs_to_del, objs_to_add = self.prune_population(new_genomes)
+		return objs_to_del, objs_to_add
 
 	def force_mate(self, bug1, bug2): #TODO Phase 2 not sure if this belongs here.
 		# allows the world to control mating through collisions or other events (like manually selected)
@@ -192,20 +282,35 @@ class BugPopulations:
 			logging.warning("invalid population type: ", population_type)
 			exit()
 
+	def reproduce(self):
+		objs_to_del = []
+		objs_to_add = []
+		for pop in self.populations.values():
+			otd, ota = pop.reproduce()
+			objs_to_del.extend(otd)
+			objs_to_add.extend(ota)
+
+		return objs_to_del, objs_to_add
+
+
+
 	def register(self, bug):
 		# look up in the dictionary to get correct population
 		# invoke add on that population
 		pop = self.lookup_population(bug.type)
 		pop.add_to_population(bug)  # intentionally crash if there isn't a pop
+		return pop
 
 	def deregister(self, bug):
 		pop = self.lookup_population(bug.type)
 		pop.remove_from_population(bug)  # intentionally crash if there isn't a pop
 
 	def load_config_file(self, population_type):
+		"""Used to load NEAT config file to drive NEAT API"""
+		#  Taken from NEAT sample code
+
 		# Load the config file, which is assumed to live in
 		# the same directory as this script.
-
 		local_dir = os.path.dirname(__file__)
 		pop_name = bw.BWOType.get_name(population_type)
 		config_file_name = pop_name + '-config-ff'
@@ -215,9 +320,10 @@ class BugPopulations:
 
 		config_path = os.path.join(local_dir, config_file_name)
 
-		#TODO...if file doesn't exist, try using a default config file
-		config = neat.Config(neat.DefaultGenome, neat.DefaultReproduction,
-								neat.DefaultSpeciesSet, neat.DefaultStagnation,
+		# TODO...if file doesn't exist, try using a default config file
+		# right now errors out if doesn't exist
+		config = NEAT.Config(NEAT.DefaultGenome, NEAT.DefaultReproduction,
+								NEAT.DefaultSpeciesSet, NEAT.DefaultStagnation,
 								config_path)
 
 		return config

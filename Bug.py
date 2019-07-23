@@ -83,7 +83,6 @@ class Bug(bw.BWObject):
 		self.health = 100
 		self.score = 0  # used to reinforce behaviour.  Add to the score when does a "good" thing
 		self.owner = self
-		self._genome = genome  # used for the genetic algorithm
 
 		if not bug_type:  # if none passed it, set it to default
 			bug_type = bw.BWOType.BUG
@@ -96,7 +95,8 @@ class Bug(bw.BWObject):
 		self.ci.register_as_emitter(self, coll.Collisions.VISUAL)		# can be seen
 
 		# participate in the population system.
-		self.pi = pop.BugPopulationInterface(bug_world, self) # uses bug_type
+		self.pi = pop.BugPopulationInterface(bug_world, self, genome) # uses bug_type
+
 
 		# add the eyes for a default bug
 		# put eye center on circumference of bug body, rotate then translate.
@@ -113,12 +113,10 @@ class Bug(bw.BWObject):
 		self.add_subcomponent(BugEye(bug_world, self.owner, self.RIGHT_EYE_LOC, self.EYE_SIZE))
 		self.add_subcomponent(BugEye(bug_world, self.owner, self.LEFT_EYE_LOC, self.EYE_SIZE))
 
-	def get_genome(self):
-		return self._genome
-
-	def get_fitness(self):
-		logging.error("must override fitness method to calculate appropriate fitness for a given bug")
-		return 0
+	def calc_fitness(self):
+		logging.warning("must override fitness method to calculate appropriate fitness for a given bug")
+		default_fitness = self.energy + self.health + self.score
+		return default_fitness
 
 	def update(self, base):
 		# TODO implement the brain interface to control motion here
@@ -127,6 +125,20 @@ class Bug(bw.BWObject):
 
 		# update subcomponents
 		self.update_subcomponents(self.abs_position)
+
+		#update the score for this iteration
+		self.update_score()
+
+		#update the energy for this iteration
+		self.update_energy()
+
+	def update_score(self):
+		"""override this method to change how a bug's score is calculated"""
+		self.score += 1
+
+	def update_energy(self):
+		"""override this method to change how a bug's energy is calculated"""
+		self.energy -= 1
 
 	def kill(self):  # overridden to include bug specific stuff
 		super().kill()

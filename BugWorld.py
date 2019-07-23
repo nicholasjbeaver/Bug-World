@@ -427,13 +427,16 @@ class BugWorld:  # defines the world, holds the objects, defines the rules of in
 	BOUNDARY_HEIGHT = 600
 	BOUNDARY_WRAP = True  # controls whether bugs go off one side and enter the other (WRAP), or hit a wall
 
-	# controls the initial number of objects in the World
+	# controls the initial number of objects in the World to start
 	NUM_CARNIVORE_BUGS = 10
 	NUM_OMNIVORE_BUGS = 15
 	NUM_HERBIVORE_BUGS = 20
 	NUM_PLANT_FOOD = 20
 	NUM_MEAT_FOOD = 1
 	NUM_OBSTACLES = 20
+
+	# control reproduction in the world
+	NUM_STEPS_BEFORE_REPRODUCTION = 1000
 
 	IDENTITY = np.identity(4, int)  # make a specific version in case change dimension from 3 to 2
 	MAP_TO_CANVAS = [[1,0,0,0], [0,-1,0,BOUNDARY_HEIGHT], [0,0,-1,0], [0,0,0,1]]  # flip x-axis and translate origin
@@ -443,42 +446,7 @@ class BugWorld:  # defines the world, holds the objects, defines the rules of in
 
 	WorldObjects = []  # collection of all of the objects in the world
 
-	#TODO need to dynamically modify the different types of objects
-	_dead_objects = []  # used to store bugs that die within populations
-	_new_objects = []  # used to store bugs need to be added to the world
 
-	#TODO get rid of old bugs
-	def add_to_dead_objects(self, dead_objects_list):
-		"""call this method if a bug dies in a population."""
-		self._dead_objects.append(dead_objects_list)  # will be used to clean up
-
-	def add_to_new_objects(self, new_objects_list):  # will be used to create new objects
-		self._new_objects.append(new_objects_list)
-
-	#TODO expose this whenever a new bug is to be created
-	def world_object_factory(self, bwo_type, starting_pos=None, name=None, genome=None):
-		"""This should be used to create the main objects in the world...not subcomponents, or hitboxes"""
-
-		if bwo_type == BWOType.HERB:
-			return Herbivore(self, starting_pos, name, genome)
-		elif bwo_type == BWOType.CARN:
-			return Carnivore(self, starting_pos, name, genome)
-		elif bwo_type == BWOType.OMN:
-			return Omnivore(self, starting_pos, name, genome)
-		elif bwo_type == BWOType.OBST:
-			if not genome:
-				logging.error("shouldn't have a genome for an obstacle")
-			return Obstacle(self, starting_pos, name)
-		elif bwo_type == BWOType.MEAT:
-			if not genome:
-				logging.error("shouldn't have a genome for an meat")
-			return Meat(self, starting_pos, name)
-		elif bwo_type == BWOType.PLANT:
-			if not genome:
-				logging.error("shouldn't have a genome for an plant ( yet :-} )")
-			return Plant(self, starting_pos, name)
-		else:
-			logging.error("invalid Object Type: " + str(bwo_type))
 
 	def __init__(self):
 
@@ -491,6 +459,8 @@ class BugWorld:  # defines the world, holds the objects, defines the rules of in
 
 		# instantiate the populations system
 		self.populations = pop.BugPopulations(self, self.valid_population_types)
+		self.sim_step = 0
+		self.reproduction_countdown = BugWorld.NUM_STEPS_BEFORE_REPRODUCTION
 
 		for i in range(0, BugWorld.NUM_HERBIVORE_BUGS):  # instantiate all of the Herbivores with a default name
 			start_pos = BugWorld.get_random_location_in_world(self)
@@ -523,14 +493,50 @@ class BugWorld:  # defines the world, holds the objects, defines the rules of in
 		self.collisions.detect_collisions()
 		self.post_collision_processing()
 
+		self.adjust_populations()
+		self.sim_step += 1
+
 	def draw(self, surface):
 		for BWO in self.WorldObjects:
 			BWO.draw(surface)
-	
+
+	def adjust_populations(self):
+		objs_to_del = []
+		objs_to_add = []
+		self.reproduction_countdown -= 1
+
+		if self.reproduction_countdown == 0:
+			self.reproduction_countdown = BugWorld.NUM_STEPS_BEFORE_REPRODUCTION
+			objs_to_del, objs_to_add = self.populations.reproduce()
+
+		# Clean out all of the old bugs
+		delete_list = []
+		working_list = []
+
+		#loop through every object in the list
+		for wo in self.WorldObjects:
+			if wo in objs_to_del:  # if the objects health is gone, add it to the list of objects to delete
+				delete_list.append(wo)
+			else:  # copy the object over to the working list
+				working_list.append(wo)
+
+		self.WorldObjects = working_list  # copy working list back over to the WorldObjects
+
+		# call the kill method on each object that was marked for deletion.
+		# That will deregister from collisions it and clean up from the population
+		for dl in delete_list:
+			dl.kill()
+
+		# now add all of the new bugs
+		for ao in objs_to_add:
+			bug_type, genome = ao
+			new_bug = self.world_object_factory(bwo_type=bug_type, genome=genome)
+			self.WorldObjects.append(new_bug)
+
+
 	def post_collision_processing(self):
 		#loop through objects and delete them, convert them etc.
-		#TODO call post_collisions_processing on all of the populations and then process dead_bug list
-		#TODO add add new bugs created by reproduction
+
 		#if health < 0, delete.
 		#if was a bug, convert it to meat
 		#if it was a plant, just delete it
@@ -561,6 +567,36 @@ class BugWorld:  # defines the world, holds the objects, defines the rules of in
 		#TODO implement this once you put it into the main loop
 		pass
 
+	def world_object_factory(self, bwo_type, starting_pos=None, name=None, genome=None):
+		"""This should be used to create the main objects in the world...not subcomponents, or hitboxes"""
+
+		if starting_pos is None:
+			starting_pos = self.get_random_location_in_world()
+
+		if name is None:
+			name = BWOType.get_name(bwo_type)
+			#TODO add unique counter for the bug
+
+		if bwo_type == BWOType.HERB:
+			return Herbivore(self, starting_pos, name, genome)
+		elif bwo_type == BWOType.CARN:
+			return Carnivore(self, starting_pos, name, genome)
+		elif bwo_type == BWOType.OMN:
+			return Omnivore(self, starting_pos, name, genome)
+		elif bwo_type == BWOType.OBST:
+			if not genome:
+				logging.error("shouldn't have a genome for an obstacle")
+			return Obstacle(self, starting_pos, name)
+		elif bwo_type == BWOType.MEAT:
+			if not genome:
+				logging.error("shouldn't have a genome for an meat")
+			return Meat(self, starting_pos, name)
+		elif bwo_type == BWOType.PLANT:
+			if not genome:
+				logging.error("shouldn't have a genome for an plant ( yet :-} )")
+			return Plant(self, starting_pos, name)
+		else:
+			logging.error("invalid Object Type: " + str(bwo_type))
 
 	# ----- Utility Class Methods ----------------
 
