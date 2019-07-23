@@ -1,15 +1,12 @@
 
 import logging
-import neat
+import neat as NEAT
+import numpy as np
 
 '''
 This encapsulates the functionality of a bug brain.  Everything is at the individual genome level
 
-- A brain has inputs and outputs
-- A brain structure is controlled by a gene
-- needs to normalize inputs
 - be able to display itself
-- be able to store the gene so can start from there
 - should have bias neurons
 - can have periodic neurons to invoke time/dependent behavior
 
@@ -27,31 +24,33 @@ BugBrainInterface -- a bug must implement this interface to have a brain
 - Must hide what type of network is being used(e.g., FF, RNN, CTRNN)
 '''
 
+
 class BugBrainInterface:
 
 	# assume that the inputs are set before activate
-	# have local variables for holding the results of collision data
-	#TODO: make sure reset collision data on the bug after activation call
 
-	_right_eye_color = tuple() #
-	_left_eye_color = tuple()
+	_brain_data = {}
 
-	def __init__(self, config, genome):
+	def __init__(self, owner, config, genome):
+		self._owner = owner
+
 		if genome:
 			#create a brain with a genome
-			pass
+			self.create_brain(config, genome)
 		else:
-			#use the config to create a genome
-			#create a brain with a genome
-			pass
+			#TODO: use the config to create a genome
+			#TODO: create a brain with a genome
+			logging.error("No genome detected for bug: " + self.owner.name )
 
-
-	def create_brain(self, config, genome):
+	def create_brain(self, config, genome_dict):
 		# create a new brain
 		# all comes from DefaultGenome section of the config file
-		self.net = neat.nn.feed_forward.FeedForwardNetwork.create(genome, config)
+		for genome_id, genome in genome_dict.items():
+			pass
 
-	def activate(self, genome, config):
+		self.net = NEAT.nn.feed_forward.FeedForwardNetwork.create(genome, config)
+
+	def activate(self):
 		# normalize inputs
 		# activate the neural net
 		# update state if outputs are to be used as inputs
@@ -60,7 +59,7 @@ class BugBrainInterface:
 		# get the inputs to the net from the sensors
 		inputs = self.get_scaled_state()
 	
-		#run the inputs the nets activation collect the outputs (i.e., action)
+		# run the inputs the nets activation collect the outputs (i.e., action)
 		action = self.net.activate(inputs)
 
 		'''
@@ -71,40 +70,83 @@ class BugBrainInterface:
 		'''
 		return action
 
+	def update_brain_inputs(self, brain_data):
+		"""brain_data: dictionary of key value pairs. keys used:
+			right_eye = tuple(R,G,B)
+			left_eye = tuple(R,G,B)
+			dist_sqrd = distance that the eye detected the colors provided (associated with the colors passed at same call)
+			vel_r = the velocity of the right wheel from the last time step
+			vel_l = the velocity of the right wheel from the last time step
 
-def update_brain_inputs(right_eye, left_eye, ):
-	pass
+		"""
+		# update the local copy with any data passed in.
+		# TODO: check to see if distance is closer, if so overwrite otherwise, ignore
+		self._brain_data.update(brain_data)
 
-def get_scaled_state(self):
+	def scale_to_zero_to_one(self, x):
+		# sigmoid goes from [0,1]
+		return 1 / (1 + np.exp(-x))
 
-	# must match num_inputs from config file
+	def scale_to_neg_one_to_one(self, x):
+		# tanh goes from [-1,1]
+		return np.tanh(x)
+
+	def get_scaled_state(self):
+
+		# must match num_inputs from config file
+		# should scale from -1 to 1 or 0 to 1 to help the neural net stabilize and converge
+		inputs = []
+
+		r, g, b, = self._brain_data.get("right_eye", (0,0,0))
+		inputs.append(self.scale_to_zero_to_one(r))
+		inputs.append(self.scale_to_zero_to_one(g))
+		inputs.append(self.scale_to_zero_to_one(b))
+
+		r, g, b, = self._brain_data.get("left_eye", (0,0,0))
+		inputs.append(self.scale_to_zero_to_one(r))
+		inputs.append(self.scale_to_zero_to_one(g))
+		inputs.append(self.scale_to_zero_to_one(b))
+
+		inputs.append(self.scale_to_neg_one_to_one(self._owner.health))
+		inputs.append(self.scale_to_neg_one_to_one(self._owner.energy))
+		inputs.append(self.scale_to_neg_one_to_one(self._owner.score))
+
+		inputs.append(self.scale_to_neg_one_to_one(self._brain_data.get("right_wheel_v", 0)))
+		inputs.append(self.scale_to_neg_one_to_one(self._brain_data.get("left_wheel_v", 0)))
+
+		# bias neurons
+		inputs.extend([1, 1, 1, 1])
+
+		# remove all of the brain data in case it isn't updated on next iteration
+		self._brain_data.clear()
+
+		# return as inputs for the net
+		return inputs
 
 	''' Inputs:
 	Phase 1
-	- right eye( from collision data )
-	- left eye(from collision data)
+	- right eye( from collision data ) RGB as separate inputs
+	- left eye(from collision data) RGB as separate inputs
 	- health
 	- energy
-	- age ... maybe a component of score?
 	- score (add to the score when something good happens e.g., health goes up, energy goes up, movement)
 		this can be used for the fitness function or for reinforcement learning
-
-- wheel velocity from last step (or could let this evolve a recurrent connection)
-
-- bias neuron to encourage movement
-
-'''
-	pass
+	- wheel velocity from last step (or could let this evolve a recurrent connection)
 
 
 '''
-** energy usage is proportional to velocity
+
+
+'''
 
 Phase 2
 - direction in the eyes
+** energy usage is proportional to velocity
 - sound
 - smell
 - communication
+- age ... maybe a component of score?
+
 
 Outputs
 Phase 1

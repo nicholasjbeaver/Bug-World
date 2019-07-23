@@ -6,6 +6,7 @@ import random
 import BugWorld as bw
 import Collisions as coll
 import BugPopulation as pop
+import BugBrain as bb
 
 logger = logging.getLogger()
 logger.setLevel(logging.ERROR)
@@ -14,8 +15,8 @@ logger.setLevel(logging.ERROR)
 class BugEyeHitbox(bw.BWObject):
 	"""This object is mounted on an eye so it can be offset and larger than the physical eye"""
 
-	def __init__(self, bug_world, owner, pos_transform, size=15):
-		self.name = "EHB"
+	def __init__(self, bug_world, owner, pos_transform, size=15,name="EHB"):
+		self.name = name
 		# position should be center of eye + radius of hitbox
 		super().__init__(pos_transform, self.name)
 		self.size = size
@@ -35,11 +36,10 @@ class BugEyeHitbox(bw.BWObject):
 		self.color = self.default_color
 
 
-
 class BugEye(bw.BWObject):
 
-	def __init__(self, bug_world, owner, pos_transform, size=1):
-		self.name = "E"
+	def __init__(self, bug_world, owner, pos_transform, size=1, name="E"):
+		self.name = name
 		super().__init__(pos_transform, self.name)
 		self.size = size
 		self.color = bw.Color.BLACK
@@ -83,6 +83,8 @@ class Bug(bw.BWObject):
 		self.health = 100
 		self.score = 0  # used to reinforce behaviour.  Add to the score when does a "good" thing
 		self.owner = self
+		self.vel_r = 0  # to store state
+		self.vel_l = 0  # to store state
 
 		if not bug_type:  # if none passed it, set it to default
 			bug_type = bw.BWOType.BUG
@@ -97,6 +99,11 @@ class Bug(bw.BWObject):
 		# participate in the population system.
 		self.pi = pop.BugPopulationInterface(bug_world, self, genome) # uses bug_type
 
+		# interface to the brain...requires config if using NEAT
+		# population interface must be instantiated first
+		config = self.pi.get_population_config()
+		genome = self.pi.get_genome()
+		self.bi = bb.BugBrainInterface(self, config, genome)
 
 		# add the eyes for a default bug
 		# put eye center on circumference of bug body, rotate then translate.
@@ -110,35 +117,47 @@ class Bug(bw.BWObject):
 		self.EYE_SIZE = int(self.size * 0.50)  # set a percentage the size of the bug
 
 		# instantiate the eyes
-		self.add_subcomponent(BugEye(bug_world, self.owner, self.RIGHT_EYE_LOC, self.EYE_SIZE))
-		self.add_subcomponent(BugEye(bug_world, self.owner, self.LEFT_EYE_LOC, self.EYE_SIZE))
+		self.add_subcomponent(BugEye(bug_world, self.owner, self.RIGHT_EYE_LOC, self.EYE_SIZE,"R"))
+		self.add_subcomponent(BugEye(bug_world, self.owner, self.LEFT_EYE_LOC, self.EYE_SIZE,"L"))
 
 	def calc_fitness(self):
 		logging.warning("must override fitness method to calculate appropriate fitness for a given bug")
-		default_fitness = self.energy + self.health + self.score
+		default_fitness = self.energy*self.health*self.score
 		return default_fitness
 
 	def update(self, base):
+		# uncomment this to not use the brain
+		# self.kinematic_wander()
+
 		# TODO implement the brain interface to control motion here
-		self.kinematic_wander()
+		# update the brain with the velocity from the last cycle
+		self.bi.update_brain_inputs({"vel_r":self.vel_r, "vel_l":self.vel_l})
+
+		# call the brain to update the velocities
+		self.vel_r, self.vel_l = self.bi.activate()
+
+		#  use the velocities and the kinematic model to move the bug
+		delta_x, delta_y, delta_theta = self.kinematic_move(self.vel_r, self.vel_l)  # assume bugbot with two wheels
+		dist_moved = np.sqrt(delta_x*delta_x + delta_y*delta_y)
+
 		self.set_abs_position(base)
 
 		# update subcomponents
 		self.update_subcomponents(self.abs_position)
 
 		#update the score for this iteration
-		self.update_score()
+		self.update_score(dist_moved)
 
 		#update the energy for this iteration
-		self.update_energy()
+		self.update_energy(dist_moved+delta_theta)
 
-	def update_score(self):
+	def update_score(self, dist_moved):
 		"""override this method to change how a bug's score is calculated"""
-		self.score += 1
+		self.score += dist_moved
 
-	def update_energy(self):
+	def update_energy(self, dist_moved):
 		"""override this method to change how a bug's energy is calculated"""
-		self.energy -= 1
+		self.energy -= dist_moved
 
 	def kill(self):  # overridden to include bug specific stuff
 		super().kill()
@@ -186,6 +205,8 @@ class Bug(bw.BWObject):
 		temp_vect = (wheel_radius / 2) * (vel_r + vel_l)
 		delta_x = temp_vect * np.cos(delta_theta)
 		delta_y = temp_vect * np.sin(delta_theta)
+		wM = bw.BugWorld.get_pos_transform(x=delta_x, y=delta_y, z=0, theta=delta_theta)  # create an incremental movement
+		self.set_rel_position(np.matmul(self.rel_position, wM))  # update the new relative position
 		return delta_x, delta_y, delta_theta
 
 

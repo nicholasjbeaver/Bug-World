@@ -196,6 +196,7 @@ class BWObject(PGObject):  # Bug World Object
 import Bug
 import Collisions as coll
 import BugPopulation as pop
+import BugBrain as bb
 
 
 #Color class so can separate out code from PG specific stuff.
@@ -417,6 +418,12 @@ class VisualCollisionMatrix(coll.CollisionMatrix):
 		collision_data = self.extract_collision_data(detector, emitter)
 		detector.color = emitter.color
 		owner = detector.owner
+		# TODO: hide this implementation detail for the eye hitbox name
+		if detector.name == 'R':
+			owner.bi.update_brain_inputs({"right_eye":emitter.color})
+		elif detector.name == 'L':
+			owner.bi.update_brain_inputs({"left_eye":emitter.color})
+
 		logging.info(owner.name + ':' + detector.name + ' saw ' + emitter.name + ' at a distance of: ' + str(round(collision_data.get("dist_sqrd"))))
 
 
@@ -428,12 +435,12 @@ class BugWorld:  # defines the world, holds the objects, defines the rules of in
 	BOUNDARY_WRAP = True  # controls whether bugs go off one side and enter the other (WRAP), or hit a wall
 
 	# controls the initial number of objects in the World to start
-	NUM_CARNIVORE_BUGS = 10
-	NUM_OMNIVORE_BUGS = 15
-	NUM_HERBIVORE_BUGS = 20
+	NUM_CARNIVORE_BUGS = 0
+	NUM_OMNIVORE_BUGS = 0
+	NUM_HERBIVORE_BUGS = 50
 	NUM_PLANT_FOOD = 20
-	NUM_MEAT_FOOD = 1
-	NUM_OBSTACLES = 20
+	NUM_MEAT_FOOD = 0
+	NUM_OBSTACLES = 0
 
 	# control reproduction in the world
 	NUM_STEPS_BEFORE_REPRODUCTION = 1000

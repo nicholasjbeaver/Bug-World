@@ -5,13 +5,13 @@
 fitness_criterion   = max
 fitness_threshold   = 1000
 no_fitness_termination = True
-pop_size            = 10
+pop_size            = 50
 reset_on_extinction = True
 
 [DefaultGenome]
 # don't forget to include bias neurons
-num_inputs              = 6
-num_hidden              = 6
+num_inputs              = 15
+num_hidden              = 15
 # right and left wheel drives
 num_outputs             = 2
 initial_connection      = full_direct

@@ -131,6 +131,9 @@ class BugPopulation:
 		# call all of the specific NEAT related initializations
 		self.NEAT_init(NEAT_config)
 
+	def get_config(self):
+		return self.config
+
 	def NEAT_init(self, config):
 		"""To hold all of the NEAT library specific.  Copied from the NEAT Population module"""
 
