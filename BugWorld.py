@@ -123,7 +123,8 @@ class BWObject(PGObject):  # Bug World Object
 	#BWO's should have an update method that includes itself and any subcomponents
 
 
-	def __init__(self, starting_pos, name="BWOBject"):
+	def __init__(self, bug_world, starting_pos, name="BWOBject"):
+		self.bug_world = bug_world 		  # the world that holds this object
 		self.rel_position = starting_pos  # relative the position that holds it (e.g., it is a subcomponent of a bug)
 		self.abs_position = starting_pos  # absolute position in the BugWorld
 		self.name = name
@@ -179,6 +180,9 @@ class BWObject(PGObject):  # Bug World Object
 
 	def add_subcomponent(self, bwo):
 		self._subcomponents.append(bwo)
+
+	def reset_fitness(self):
+		pass
 
 	def kill(self):
 		"""this is necessary to make sure all of subcomponents and interfaces are cleaned up"""
@@ -321,6 +325,7 @@ class PhysicalCollisionMatrix(coll.CollisionMatrix):
 		herb.energy += 10
 		plant.health -= 10
 		if plant.size > 1: plant.size -= 1
+		herb.bug_world.global_plant_food_amount -= 10
 
 	def omn_plant(self, omn, plant):
 		self.print_collision(omn, plant)
@@ -420,9 +425,12 @@ class VisualCollisionMatrix(coll.CollisionMatrix):
 		owner = detector.owner
 		# TODO: hide this implementation detail for the eye hitbox name
 		if detector.name == 'R':
-			owner.bi.update_brain_inputs({"right_eye":emitter.color})
+			brain_data = {"right_eye":emitter.color}
 		elif detector.name == 'L':
-			owner.bi.update_brain_inputs({"left_eye":emitter.color})
+			brain_data = {"left_eye": emitter.color}
+
+		brain_data.update(collision_data)
+		owner.bi.update_brain_inputs(brain_data)
 
 		logging.info(owner.name + ':' + detector.name + ' saw ' + emitter.name + ' at a distance of: ' + str(round(collision_data.get("dist_sqrd"))))
 
@@ -430,20 +438,20 @@ class VisualCollisionMatrix(coll.CollisionMatrix):
 class BugWorld:  # defines the world, holds the objects, defines the rules of interaction
 
 	# World Constants used to define the size of the world and for drawing the screen
-	BOUNDARY_WIDTH = 800
-	BOUNDARY_HEIGHT = 600
+	BOUNDARY_WIDTH = 1000
+	BOUNDARY_HEIGHT = 800
 	BOUNDARY_WRAP = True  # controls whether bugs go off one side and enter the other (WRAP), or hit a wall
 
 	# controls the initial number of objects in the World to start
 	NUM_CARNIVORE_BUGS = 0
 	NUM_OMNIVORE_BUGS = 0
-	NUM_HERBIVORE_BUGS = 50
-	NUM_PLANT_FOOD = 20
+	NUM_HERBIVORE_BUGS = 30
+	NUM_PLANT_FOOD = 30
 	NUM_MEAT_FOOD = 0
 	NUM_OBSTACLES = 0
 
 	# control reproduction in the world
-	NUM_STEPS_BEFORE_REPRODUCTION = 1000
+	NUM_STEPS_BEFORE_REPRODUCTION = 500
 
 	IDENTITY = np.identity(4, int)  # make a specific version in case change dimension from 3 to 2
 	MAP_TO_CANVAS = [[1,0,0,0], [0,-1,0,BOUNDARY_HEIGHT], [0,0,-1,0], [0,0,0,1]]  # flip x-axis and translate origin
@@ -452,14 +460,13 @@ class BugWorld:  # defines the world, holds the objects, defines the rules of in
 	valid_population_types = {BWOType.OMN, BWOType.HERB, BWOType.CARN}  # the different types of populations allowed
 
 	WorldObjects = []  # collection of all of the objects in the world
-
-
+	global_plant_food_amount = 0
 
 	def __init__(self):
 
 		self.rel_position = BugWorld.MAP_TO_CANVAS  # maps Bug World coords to the canvas coords in Pygame
 
-		#instantiate the collision system
+		# instantiate the collision system
 		self.collisions = coll.Collisions()
 		self.pcm = PhysicalCollisionMatrix(self.collisions)
 		self.vcm = VisualCollisionMatrix(self.collisions)
@@ -487,7 +494,8 @@ class BugWorld:  # defines the world, holds the objects, defines the rules of in
 
 		for i in range(0, BugWorld.NUM_PLANT_FOOD ):
 			start_pos = BugWorld.get_random_location_in_world(self)
-			self.WorldObjects.append(Plant(self, start_pos, "P" + str(i)))
+			plant = Plant(self, start_pos, "P" + str(i))
+			self.WorldObjects.append(plant)
 
 		for i in range(0, BugWorld.NUM_MEAT_FOOD):
 			start_pos = BugWorld.get_random_location_in_world(self)
@@ -516,6 +524,16 @@ class BugWorld:  # defines the world, holds the objects, defines the rules of in
 			self.reproduction_countdown = BugWorld.NUM_STEPS_BEFORE_REPRODUCTION
 			objs_to_del, objs_to_add = self.populations.reproduce()
 
+			# now add food back in TODO: move this to a plant population controller
+			health_per_plant = 100  # hard coded but it is what is in plant class
+			target_food = BugWorld.NUM_PLANT_FOOD * health_per_plant
+			amt_needed = target_food - self.global_plant_food_amount
+			num_to_add = int(amt_needed/health_per_plant)
+
+			for i in range(1, num_to_add):
+				start_pos = BugWorld.get_random_location_in_world(self)
+				self.WorldObjects.append(Plant(self, start_pos, "P" + str(i)))
+
 		# Clean out all of the old bugs
 		delete_list = []
 		working_list = []
@@ -525,6 +543,7 @@ class BugWorld:  # defines the world, holds the objects, defines the rules of in
 			if wo in objs_to_del:  # if the objects health is gone, add it to the list of objects to delete
 				delete_list.append(wo)
 			else:  # copy the object over to the working list
+				wo.reset_fitness()  # NEAT evaluations
 				working_list.append(wo)
 
 		self.WorldObjects = working_list  # copy working list back over to the WorldObjects
@@ -539,7 +558,6 @@ class BugWorld:  # defines the world, holds the objects, defines the rules of in
 			bug_type, genome = ao
 			new_bug = self.world_object_factory(bwo_type=bug_type, genome=genome)
 			self.WorldObjects.append(new_bug)
-
 
 	def post_collision_processing(self):
 		#loop through objects and delete them, convert them etc.
@@ -648,7 +666,7 @@ class BugWorld:  # defines the world, holds the objects, defines the rules of in
 
 # ------------- definitions of all of the objects in the world --------------------
 class Herbivore(Bug.Bug):
-	def __init__ (self, bug_world, starting_pos, name="HERB", genome=None):
+	def __init__(self, bug_world, starting_pos, name="HERB", genome=None):
 		super().__init__(bug_world, starting_pos, name, genome, bug_type=BWOType.HERB )
 		self.color = Color.GREEN
 		self.default_color = self.color
@@ -670,7 +688,7 @@ class Carnivore(Bug.Bug):
 
 class Obstacle(BWObject):
 	def __init__ (self, bug_world, starting_pos, name="OBST"):
-		super().__init__(starting_pos, name )
+		super().__init__(bug_world, starting_pos, name )
 		self.color = Color.YELLOW
 		self.default_color = self.color
 		self.type = BWOType.OBST
@@ -683,7 +701,7 @@ class Obstacle(BWObject):
 
 class Meat(BWObject):
 	def __init__ (self, bug_world, starting_pos, name ="MEAT"):
-		super().__init__(starting_pos, name )
+		super().__init__(bug_world, starting_pos, name )
 		self.color = Color.BROWN
 		self.default_color = self.color
 		self.type = BWOType.MEAT
@@ -696,7 +714,7 @@ class Meat(BWObject):
 
 class Plant(BWObject):
 	def __init__(self, bug_world, starting_pos, name="PLANT"):
-		super().__init__(starting_pos, name )
+		super().__init__(bug_world, starting_pos, name )
 		self.color = Color.DARK_GREEN
 		self.default_color = self.color
 		self.type = BWOType.PLANT
@@ -705,4 +723,6 @@ class Plant(BWObject):
 		self.ci = coll.CollisionInterface(bug_world.collisions, self)
 		self.ci.register_as_emitter(self, coll.Collisions.PHYSICAL)
 		self.ci.register_as_emitter(self, coll.Collisions.VISUAL)
+		self.bug_world.global_plant_food_amount += self.health
+
 

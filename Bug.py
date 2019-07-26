@@ -18,7 +18,7 @@ class BugEyeHitbox(bw.BWObject):
 	def __init__(self, bug_world, owner, pos_transform, size=15,name="EHB"):
 		self.name = name
 		# position should be center of eye + radius of hitbox
-		super().__init__(pos_transform, self.name)
+		super().__init__(bug_world, pos_transform, self.name)
 		self.size = size
 		self.color = bw.Color.GREY
 		self.default_color = self.color
@@ -40,18 +40,18 @@ class BugEye(bw.BWObject):
 
 	def __init__(self, bug_world, owner, pos_transform, size=1, name="E"):
 		self.name = name
-		super().__init__(pos_transform, self.name)
+		super().__init__(bug_world, pos_transform, name)
 		self.size = size
 		self.color = bw.Color.BLACK
 		self.default_color = self.color
-		self.type = bw.BWOType.EHB
+		self.type = bw.BWOType.EYE
 		self.owner = owner
 		self.HITBOX_SIZE = self.size * 5
 
 		# add the eye hitbox for the current eye
 		# put hitbox so tangent with eye center...actually add 1 so avoid collision with bug just for efficiency
 		self.HITBOX_LOC = bw.BugWorld.get_pos_transform((self.HITBOX_SIZE + 1), 0, 0, 0)
-		self.add_subcomponent(BugEyeHitbox(bug_world, owner, self.HITBOX_LOC, self.HITBOX_SIZE))
+		self.add_subcomponent(BugEyeHitbox(bug_world, owner, self.HITBOX_LOC, self.HITBOX_SIZE, name))
 
 	def update(self, base):
 		# eyes don't move independent of bug, so relative pos won't change.
@@ -75,13 +75,16 @@ class Bug(bw.BWObject):
 	DEFAULT_MOVE_AMT = 5				# used for random moving
 
 	def __init__(self, bug_world, initial_pos, name="Bug", genome=None, bug_type=None):
-		super().__init__(initial_pos, name)
+		super().__init__(bug_world, initial_pos, name)
 		self.size = 10  # override default and set the intial radius of bug
 		self.color = bw.Color.PINK  # override default and set the initial color of a default bug
 		self.default_color = self.color
-		self.energy = 100  # default...needs to be overridden
-		self.health = 100
-		self.score = 0  # used to reinforce behaviour.  Add to the score when does a "good" thing
+		self.default_energy = 100
+		self.default_health = 100
+		self.default_score = 0
+		self.energy = self.default_energy  # default...needs to be overridden
+		self.health = self.default_health
+		self.score = self.default_score  # used to reinforce behaviour.  Add to the score when does a "good" thing
 		self.owner = self
 		self.vel_r = 0  # to store state
 		self.vel_l = 0  # to store state
@@ -97,7 +100,7 @@ class Bug(bw.BWObject):
 		self.ci.register_as_emitter(self, coll.Collisions.VISUAL)		# can be seen
 
 		# participate in the population system.
-		self.pi = pop.BugPopulationInterface(bug_world, self, genome) # uses bug_type
+		self.pi = pop.BugPopulationInterface(bug_world, self, genome)  # uses bug_type
 
 		# interface to the brain...requires config if using NEAT
 		# population interface must be instantiated first
@@ -122,8 +125,14 @@ class Bug(bw.BWObject):
 
 	def calc_fitness(self):
 		logging.warning("must override fitness method to calculate appropriate fitness for a given bug")
-		default_fitness = self.energy*self.health*self.score
+		# default_fitness = self.energy*self.health*self.score
+		default_fitness = self.energy*self.score
 		return default_fitness
+
+	def reset_fitness(self):
+		self.energy = self.default_energy
+		self.score = self.default_score
+		self.health = self.default_health
 
 	def update(self, base):
 		# uncomment this to not use the brain
@@ -138,7 +147,7 @@ class Bug(bw.BWObject):
 
 		#  use the velocities and the kinematic model to move the bug
 		delta_x, delta_y, delta_theta = self.kinematic_move(self.vel_r, self.vel_l)  # assume bugbot with two wheels
-		dist_moved = np.sqrt(delta_x*delta_x + delta_y*delta_y)
+		dist_moved = delta_x + delta_y  # want to reward for forward movement so use actual values
 
 		self.set_abs_position(base)
 
@@ -146,10 +155,11 @@ class Bug(bw.BWObject):
 		self.update_subcomponents(self.abs_position)
 
 		#update the score for this iteration
-		self.update_score(dist_moved)
+		self.update_score(dist_moved)  # reward for forward movement
 
-		#update the energy for this iteration
-		self.update_energy(dist_moved+delta_theta)
+		#update the energy used for this iteration
+		amt = abs(dist_moved)+abs(delta_theta)  # it costs energy to move or rotate
+		self.update_energy(amt)
 
 	def update_score(self, dist_moved):
 		"""override this method to change how a bug's score is calculated"""

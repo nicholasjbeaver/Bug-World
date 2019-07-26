@@ -156,7 +156,7 @@ class CollisionMatrix:
 		dx = detector.get_abs_x() - emitter.get_abs_x()
 		dy = detector.get_abs_y() - emitter.get_abs_y()
 		dist_sqrd = (dx * dx) + (dy * dy)
-		return  {'dist_sqrd':dist_sqrd}
+		return {'dist_sqrd':dist_sqrd}
 
 	def print_collision(self, OB1, OB2):
 		logging.debug(OB1.name + ' T:' + str(OB1.type) + ", " + OB2.name + ' T:' + str(OB2.type))

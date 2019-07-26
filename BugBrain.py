@@ -80,16 +80,30 @@ class BugBrainInterface:
 
 		"""
 		# update the local copy with any data passed in.
-		# TODO: check to see if distance is closer, if so overwrite otherwise, ignore
+		'''
+		dist_sqrd = brain_data.get("dist_sqrd")
+		curr_dist_sqrd = self._brain_data.get("dist_sqrd")
+		if dist_sqrd < curr_dist_sqrd:  			# TODO: check to see if distance is closer, if so overwrite otherwise, ignore
+			self._brain_data.update(brain_data)
+		'''
 		self._brain_data.update(brain_data)
 
 	def scale_to_zero_to_one(self, x):
 		# sigmoid goes from [0,1]
-		return 1 / (1 + np.exp(-x))
+		value = 1.0 / (1.0 + np.exp(-x))
+		return value
 
 	def scale_to_neg_one_to_one(self, x):
 		# tanh goes from [-1,1]
 		return np.tanh(x)
+
+	def cap_zero_to_one(self, x):
+		if x < 0:
+			return 0.0
+		elif x > 1:
+			return 1.0
+		else:
+			return x
 
 	def get_scaled_state(self):
 
@@ -97,22 +111,21 @@ class BugBrainInterface:
 		# should scale from -1 to 1 or 0 to 1 to help the neural net stabilize and converge
 		inputs = []
 
-		r, g, b, = self._brain_data.get("right_eye", (0,0,0))
-		inputs.append(self.scale_to_zero_to_one(r))
-		inputs.append(self.scale_to_zero_to_one(g))
-		inputs.append(self.scale_to_zero_to_one(b))
+		r, g, b, = self._brain_data.get("right_eye", (0, 0, 0))
+		inputs.append(r/100.0)
+		inputs.append(g/100.0)
+		inputs.append(b/100.0)
 
-		r, g, b, = self._brain_data.get("left_eye", (0,0,0))
-		inputs.append(self.scale_to_zero_to_one(r))
-		inputs.append(self.scale_to_zero_to_one(g))
-		inputs.append(self.scale_to_zero_to_one(b))
+		r, g, b, = self._brain_data.get("left_eye", (0, 0, 0))
+		inputs.append(r/100.0)
+		inputs.append(g/100.0)
+		inputs.append(b/100.0)
 
-		inputs.append(self.scale_to_neg_one_to_one(self._owner.health))
-		inputs.append(self.scale_to_neg_one_to_one(self._owner.energy))
-		inputs.append(self.scale_to_neg_one_to_one(self._owner.score))
+		#inputs.append(self.cap_zero_to_one(self._owner.health/100.0))
+		#inputs.append(self.cap_zero_to_one(self._owner.energy/100.0))
 
-		inputs.append(self.scale_to_neg_one_to_one(self._brain_data.get("right_wheel_v", 0)))
-		inputs.append(self.scale_to_neg_one_to_one(self._brain_data.get("left_wheel_v", 0)))
+		inputs.append(self._brain_data.get("right_wheel_v", 0))
+		inputs.append(self._brain_data.get("left_wheel_v", 0))
 
 		# bias neurons
 		inputs.extend([1, 1, 1, 1])

@@ -4,6 +4,7 @@ import logging
 import math
 import neat as NEAT
 from neat.math_util import mean
+from neat.reporting import ReporterSet
 
 import BugWorld as bw
 '''
@@ -71,7 +72,7 @@ class BugPopulationInterface:
 
 		# populations will use the owner_bug.type to try to add it to the correct population
 		# assumes the populations interface has been already created on the World
-		self._pop = bug_world.populations.register(owner_bug) # save the population  to make it easier later
+		self._pop = bug_world.populations.register(owner_bug)  # save the population  to make it easier later
 
 		if self._genome is None:
 			self._genome = self._pop.get_new_genome()  	# genomes are specific to a given population.
@@ -119,14 +120,13 @@ class BugPopulation:
 
 	# This is a complete re-write of the NEAT Population interface
 
-	_pop_objects = []  # list of all of the bugs in the population. if use unique key could make it a dict
 
 	def __init__(self, NEAT_config, pop_type):
 		""" config: is the NEAT config	\
 			pop_type: is the type of this population"""
 
-		#TODO add a bug_world for a call back so can instruct to add or delete a bug
 		self._pop_type = pop_type
+		self._pop_objects = []  # list of all of the bugs in the population. if use unique key could make it a dict
 
 		# call all of the specific NEAT related initializations
 		self.NEAT_init(NEAT_config)
@@ -134,16 +134,27 @@ class BugPopulation:
 	def get_config(self):
 		return self.config
 
+	def add_reporter(self, reporter):
+		self.reporters.add(reporter)
+
+	def remove_reporter(self,reporter):
+		self.reporters.remove(reporter)
+
 	def NEAT_init(self, config):
 		"""To hold all of the NEAT library specific.  Copied from the NEAT Population module"""
 
 		# create the NEAT specific classes required, Stagnation, Reproduction, Species
 		self.reporters = NEAT.reporting.ReporterSet()
 		self.config = config
-		self.stagnation = config.stagnation_type(config.stagnation_config, self.reporters)
+		stagnation = config.stagnation_type(config.stagnation_config, self.reporters)
 		self.reproduction = config.reproduction_type(config.reproduction_config,
 													 self.reporters,
-													 self.stagnation)
+													 stagnation)
+
+		stats = NEAT.StatisticsReporter()
+		self.add_reporter(stats)
+		self.add_reporter(NEAT.StdOutReporter(True))
+
 		if config.fitness_criterion == 'max':
 			self.fitness_criterion = max
 		elif config.fitness_criterion == 'min':
@@ -156,21 +167,46 @@ class BugPopulation:
 
 		self.species = config.species_set_type(config.species_set_config, self.reporters)
 		self.generation = 0
+		self.best_genome = None
 
 	def	NEAT_run(self):
 
 		#Taken from the NEAT code in population module
 
+
+
 		# collect all of the genomes because NEAT assumes a dictionary
 		curr_genomes = self.gather_genomes()
+
+		if len(curr_genomes) == 0:
+			no_genomes = {}
+			return no_genomes  # the population has no bugs in it.
+
+		self.reporters.start_generation(self.generation)
 
 		# speciate
 		self.species.speciate(self.config, curr_genomes, self.generation)
 
+		# gather and report statistics
+		best = None
+		for g in curr_genomes.values():
+			if best is None or g.fitness > best.fitness:
+				best = g
+
+		self.reporters.post_evaluate(self.config, curr_genomes, self.species, best)
+
+		# track best genome ever seen
+		if self.best_genome is None or best.fitness > self.best_genome.fitness:
+			self.best_genome = best
+
 		# reproduce
 		# Create the next generation from the current generation.
 		new_genomes = self.reproduction.reproduce(self.config, self.species,
-														self.config.pop_size, self.generation)
+													self.config.pop_size, self.generation)
+
+
+		self.reporters.end_generation(self.config, new_genomes, self.species)
+
 		# increase the generation
 		self.generation += 1
 
@@ -189,7 +225,6 @@ class BugPopulation:
 		for pop_obj in self._pop_objects:  # loop through the current bug population
 			genomes.update(pop_obj.pi.get_genome())
 		return genomes
-
 
 	def add_to_population(self, bug):
 		if bug not in self._pop_objects:  # make sure is only added once
@@ -243,26 +278,22 @@ class BugPopulation:
 		objs_to_del, objs_to_add = self.prune_population(new_genomes)
 		return objs_to_del, objs_to_add
 
-	def force_mate(self, bug1, bug2): #TODO Phase 2 not sure if this belongs here.
-		# allows the world to control mating through collisions or other events (like manually selected)
-		pass
-
 
 class BugPopulations:
 	"""This contains all of the different populations in a given BugWorld"""
 	# TODO store the config file names for each population, if not supplied use a default
 	# read in and store the config params for each population
 
-	# create a dictionary of valid types that can have brains
-	populations = {}
 
 	def __init__(self, bug_world, valid_bug_types):
 		"""	bug_world: is the owner \
 			valid_bug_types: is a list of all of the valid populations that will be created. Assumes is valid BWOType"""
 
+		# create a dictionary of valid types that can have brains
+		self.populations = {}
+
 		self._bug_world = bug_world  # call back handle to the BugWorld that holds the populations
 		self._valid_types = valid_bug_types  # these are the valid bug types.  a population will be created for each one
-
 		# for each type, create a population and read in the config for it
 		# add the group to the dictionary
 		for population_type in self._valid_types:
@@ -271,16 +302,14 @@ class BugPopulations:
 
 			# create a new population
 			pop = BugPopulation(config, population_type)
-			#stats = neat.StatisticsReporter()  # TODO once implementing NEAT
-			#pop.add_reporter(stats)  # TODO once implementing NEAT
-			#pop.add_reporter(neat.StdOutReporter(True))  # TODO once implementing NEAT
 
 			self.populations[population_type] = pop
 
 	def lookup_population(self, population_type):
 		"""use to encapsulate error handling for populations that are not found"""
 		try:
-			return self.populations[population_type]
+			pop = self.populations[population_type]
+			return pop
 		except KeyError:
 			logging.warning("invalid population type: ", population_type)
 			exit()
@@ -294,8 +323,6 @@ class BugPopulations:
 			objs_to_add.extend(ota)
 
 		return objs_to_del, objs_to_add
-
-
 
 	def register(self, bug):
 		# look up in the dictionary to get correct population
