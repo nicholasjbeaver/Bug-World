@@ -133,9 +133,7 @@ class Bug(bw.BWObject):
 		self.add_subcomponent(BugEye(bug_world, self.owner, self.LEFT_EYE_LOC, self.EYE_SIZE,"L"))
 
 	def calc_fitness(self):
-		logging.warning("must override fitness method to calculate appropriate fitness for a given bug")
-		# default_fitness = self.energy*self.health*self.score
-		default_fitness = self.energy*self.score
+		default_fitness = self.energy*self.health*self.score
 		return default_fitness
 
 	def reset_fitness(self):

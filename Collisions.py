@@ -57,6 +57,7 @@ class CollisionInterface:
 				self.collisions.deregister_detector(collision_object, collision_type)
 
 		self.collision_registration_list.clear()
+		self.collisions = None
 		self.owner = None
 
 	def is_this_me(self, co2):

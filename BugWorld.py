@@ -2,6 +2,7 @@ import logging
 import numpy as np
 import random
 from itertools import count
+
 from memory_profiler import profile
 import sys
 import gc
@@ -128,7 +129,6 @@ class BWObject(PGObject):  # Bug World Object
 	#stores an absolute position to prevent recalculating it when passing to contained objects.
 	#BWO's should have a draw method that includes itself
 	#BWO's should have an update method that includes itself and any subcomponents
-
 
 	def __init__(self, bug_world, starting_pos, name="BWOBject"):
 		self.bug_world = bug_world 		  # the world that holds this object
@@ -341,7 +341,7 @@ class PhysicalCollisionMatrix(coll.CollisionMatrix):
 		self.print_collision(omn, plant)
 		omn.energy += 10
 		plant.health -= 10
-		if plant.size > 1 : plant.size -= 1
+		if plant.size > 1: plant.size -= 1
 
 	def omn_meat(self, omn, meat):
 		self.print_collision(omn, meat)
@@ -429,19 +429,32 @@ class VisualCollisionMatrix(coll.CollisionMatrix):
 		}
 		return cd
 
-	def invoke_handler(self, detector, emitter):
+	def extract_collision_data(self, detector, emitter): # for visual collisions
+		"""
+			want the distance between the emitter object and the bug...not the eye_hitbox
+		"""
+		detector = detector.owner  # use the the bug as the detector
+
+		dx = detector.get_abs_x() - emitter.get_abs_x()
+		dy = detector.get_abs_y() - emitter.get_abs_y()
+		dist_sqrd = (dx * dx) + (dy * dy)
+		return {'dist_sqrd':dist_sqrd}
+
+	def invoke_handler(self, detector, emitter):  # for visual collisions
 		collision_data = self.extract_collision_data(detector, emitter)
 		detector.color = emitter.color
 		owner = detector.owner
+
+		dist_sqrd = collision_data.get('dist_sqrd', 0)
 		# TODO: hide this implementation detail for the eye hitbox name
 		if detector.name == 'R':
-			brain_data = {"right_eye":emitter.color}
+			brain_data = {'right_eye': (emitter.color, dist_sqrd)}
 		elif detector.name == 'L':
-			brain_data = {"left_eye": emitter.color}
+			brain_data = {'left_eye': (emitter.color, dist_sqrd)}
+		else:  # should be an eye, if not just return
+			return
 
-		brain_data.update(collision_data)
 		owner.bi.update_brain_inputs(brain_data)
-
 		logging.info(owner.name + ':' + detector.name + ' saw ' + emitter.name + ' at a distance of: ' + str(round(collision_data.get("dist_sqrd"))))
 
 
@@ -458,7 +471,7 @@ class BugWorld:  # defines the world, holds the objects, defines the rules of in
 	NUM_HERBIVORE_BUGS = 30
 	NUM_PLANT_FOOD = 30
 	NUM_MEAT_FOOD = 0
-	NUM_OBSTACLES = 0
+	NUM_OBSTACLES = 10
 
 	# control reproduction in the world
 	NUM_STEPS_BEFORE_REPRODUCTION = 100
@@ -600,7 +613,8 @@ class BugWorld:  # defines the world, holds the objects, defines the rules of in
 		#loop through every object in the list
 		for wo in self.WorldObjects:
 			if wo.health <= 0:  # if the objects health is gone, add it to the list of objects to delete
-				delete_list.append(wo)
+				if wo.type in {BWOType.PLANT, BWOType.MEAT}:  # let adjust_populations clean out bugs
+					delete_list.append(wo)
 
 				# if it is a bug, then add a meat object to the same location
 				if wo.type in {BWOType.HERB, BWOType.OMN, BWOType.CARN}:
@@ -743,7 +757,8 @@ class Meat(BWObject):
 class Plant(BWObject):
 	def __init__(self, bug_world, starting_pos, name="PLANT"):
 		super().__init__(bug_world, starting_pos, name )
-		self.color = Color.DARK_GREEN
+		# self.color = Color.DARK_GREEN
+		self.color = Color.RED
 		self.default_color = self.color
 		self.type = BWOType.PLANT
 		self.size = 5

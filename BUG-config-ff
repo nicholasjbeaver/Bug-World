@@ -10,8 +10,8 @@ reset_on_extinction = True
 
 [DefaultGenome]
 # don't forget to include bias neurons
-num_inputs              = 12
-num_hidden              = 12
+num_inputs              = 14
+num_hidden              = 14
 # right and left wheel drives
 num_outputs             = 2
 initial_connection      = full_nodirect
