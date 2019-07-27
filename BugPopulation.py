@@ -5,6 +5,7 @@ import math
 import neat as NEAT
 from neat.math_util import mean
 from neat.reporting import ReporterSet
+from memory_profiler import profile
 
 import BugWorld as bw
 '''
@@ -111,7 +112,10 @@ class BugPopulationInterface:
 
 	# populations will use the owner_bug.type to try to remove it from the population.  it does not delete the bug
 	def deregister(self):
-		self._pop.deregister(self._owner_bug)
+		pop = self._pop
+		self._pop = None  # remove the circular reference for garbage collection
+		pop.del_from_population(self._owner_bug)
+		self._owner_bug = None
 
 
 #TODO Maybe use some BugWorldPopulation base class for all objs?  i.e., move plants and meat to a diff pop?
@@ -171,10 +175,6 @@ class BugPopulation:
 
 	def	NEAT_run(self):
 
-		#Taken from the NEAT code in population module
-
-
-
 		# collect all of the genomes because NEAT assumes a dictionary
 		curr_genomes = self.gather_genomes()
 
@@ -182,10 +182,8 @@ class BugPopulation:
 			no_genomes = {}
 			return no_genomes  # the population has no bugs in it.
 
+		# Taken from the NEAT code in population module
 		self.reporters.start_generation(self.generation)
-
-		# speciate
-		self.species.speciate(self.config, curr_genomes, self.generation)
 
 		# gather and report statistics
 		best = None
@@ -193,17 +191,35 @@ class BugPopulation:
 			if best is None or g.fitness > best.fitness:
 				best = g
 
-		self.reporters.post_evaluate(self.config, curr_genomes, self.species, best)
-
 		# track best genome ever seen
 		if self.best_genome is None or best.fitness > self.best_genome.fitness:
 			self.best_genome = best
 
-		# reproduce
+		if self.species.species:
+			self.reporters.post_evaluate(self.config, curr_genomes, self.species, best)
+		else:
+			# Divide the new population into species.
+			self.species.speciate(self.config, curr_genomes, self.generation)
+
 		# Create the next generation from the current generation.
 		new_genomes = self.reproduction.reproduce(self.config, self.species,
 													self.config.pop_size, self.generation)
 
+		# Check for complete extinction.
+		if not self.species.species:
+			self.reporters.complete_extinction()
+
+			# If requested by the user, create a completely new population,
+			# otherwise raise an exception.
+			if self.config.reset_on_extinction:
+				new_genomes = self.reproduction.create_new(self.config.genome_type,
+															   self.config.genome_config,
+															   self.config.pop_size)
+			else:
+				raise CompleteExtinctionException()
+
+		# Divide the new population into species.
+		self.species.speciate(self.config, new_genomes, self.generation)
 
 		self.reporters.end_generation(self.config, new_genomes, self.species)
 

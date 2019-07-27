@@ -2,6 +2,13 @@ import logging
 import numpy as np
 import random
 from itertools import count
+from memory_profiler import profile
+import sys
+import gc
+import objgraph
+import os
+os.environ["PATH"] += os.pathsep + 'C:/Program Files (x86)/Graphviz2.38/bin/'
+
 
 #Going to use 3D matrices even if in 2d
 #See http://matthew-brett.github.io/transforms3d/ for details on the lib used
@@ -187,6 +194,9 @@ class BWObject(PGObject):  # Bug World Object
 	def kill(self):
 		"""this is necessary to make sure all of subcomponents and interfaces are cleaned up"""
 		self.kill_subcomponents()
+		self._subcomponents.clear()
+		self.bug_world = None
+
 		try:
 			self.ci.deregister_all()
 		except:
@@ -451,7 +461,7 @@ class BugWorld:  # defines the world, holds the objects, defines the rules of in
 	NUM_OBSTACLES = 0
 
 	# control reproduction in the world
-	NUM_STEPS_BEFORE_REPRODUCTION = 500
+	NUM_STEPS_BEFORE_REPRODUCTION = 100
 
 	IDENTITY = np.identity(4, int)  # make a specific version in case change dimension from 3 to 2
 	MAP_TO_CANVAS = [[1,0,0,0], [0,-1,0,BOUNDARY_HEIGHT], [0,0,-1,0], [0,0,0,1]]  # flip x-axis and translate origin
@@ -459,12 +469,12 @@ class BugWorld:  # defines the world, holds the objects, defines the rules of in
 	# used to control what types of objects will be controlled by the population interface
 	valid_population_types = {BWOType.OMN, BWOType.HERB, BWOType.CARN}  # the different types of populations allowed
 
-	WorldObjects = []  # collection of all of the objects in the world
 	global_plant_food_amount = 0
 
 	def __init__(self):
 
 		self.rel_position = BugWorld.MAP_TO_CANVAS  # maps Bug World coords to the canvas coords in Pygame
+		self.WorldObjects = []  # collection of all of the objects in the world
 
 		# instantiate the collision system
 		self.collisions = coll.Collisions()
@@ -552,6 +562,24 @@ class BugWorld:  # defines the world, holds the objects, defines the rules of in
 		# That will deregister from collisions it and clean up from the population
 		for dl in delete_list:
 			dl.kill()
+
+		# if len(delete_list):
+		# 	temp_dl = delete_list[0]
+		# else:
+		# 	temp_dl = None
+		#
+		# for dl in delete_list:
+		# 	rc = sys.getrefcount(dl)
+		# 	print("before kill:" + str(rc))
+		# 	dl.kill()
+		# 	rc = sys.getrefcount(dl)
+		# 	print("after kill:" + str(rc))
+
+		# if temp_dl is not None:
+		# 	gc.collect()
+		# 	rc = sys.getrefcount(temp_dl)
+		# 	objgraph.show_backrefs(temp_dl, filename='temp_dl.png')
+		# 	print("after gc:" + str(rc))
 
 		# now add all of the new bugs
 		for ao in objs_to_add:

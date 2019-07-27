@@ -27,12 +27,11 @@ BugBrainInterface -- a bug must implement this interface to have a brain
 
 class BugBrainInterface:
 
-	# assume that the inputs are set before activate
-
-	_brain_data = {}
-
 	def __init__(self, owner, config, genome):
-		self._owner = owner
+		#self._owner = owner
+
+		# assume that the inputs are set before activate
+		self._brain_data = {}
 
 		if genome:
 			#create a brain with a genome

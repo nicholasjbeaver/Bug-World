@@ -35,6 +35,12 @@ class BugEyeHitbox(bw.BWObject):
 		super().draw(surface, 1)  # the 1 says to draw the outline only
 		self.color = self.default_color
 
+	def kill(self):
+		super().kill()
+		self.ci.deregister_all()
+		self.ci = None
+		self.owner = None
+
 
 class BugEye(bw.BWObject):
 
@@ -58,6 +64,9 @@ class BugEye(bw.BWObject):
 		self.set_abs_position(base) #update it based on the passed in ref frame
 		self.update_subcomponents(self.abs_position)
 
+	def kill(self):
+		super().kill()
+		self.owner = None
 
 class Bug(bw.BWObject):
 	"""Abstract base class.  All bugs in the BugWorld must be of this type
@@ -171,11 +180,12 @@ class Bug(bw.BWObject):
 
 	def kill(self):  # overridden to include bug specific stuff
 		super().kill()
-		try:
-			self.pi.deregister()  # if part of a population, deregister it
-		except:
-			pass
-
+		self.ci.deregister_all()
+		self.ci = None
+		self.pi.deregister()  # if part of a population, deregister it
+		self.pi = None
+		self.bi = None
+		self.owner = None
 
 	############ Movement stuff #######################
 	def move_forward(self, amount_to_move=DEFAULT_MOVE_AMT):
