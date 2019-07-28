@@ -328,32 +328,51 @@ class PhysicalCollisionMatrix(coll.CollisionMatrix):
 		logging.info('carn beatn up on his own kind')
 		carn2.health -= 5
 
+# Bug to food interactions
 
-#Bug to food interactions
 	def herb_plant(self, herb, plant):
 		self.print_collision(herb, plant)
-		herb.energy += 10
-		plant.health -= 10
-		if plant.size > 1: plant.size -= 1
-		herb.bug_world.global_plant_food_amount -= 10
+
+		# could be collided with and take health below 0 before it is cleaned up from the world.
+		if plant.health > 0:  # only process if the plant is still alive (i.e., has health)
+			food_consumed = min(10, plant.health)  # only consume as much as the plant has left
+			herb.energy += food_consumed
+			plant.health -= food_consumed
+			herb.bug_world.global_plant_food_amount -= food_consumed
+			if plant.size > 1:
+				plant.size -= 1  # makes sure that if the object is in BWO, it is displayed
 
 	def omn_plant(self, omn, plant):
 		self.print_collision(omn, plant)
-		omn.energy += 10
-		plant.health -= 10
-		if plant.size > 1: plant.size -= 1
+		# could be collided with and take health below 0 before it is cleaned up from the world.
+		if plant.health > 0:  # only process if the plant is still alive (i.e., has health)
+			food_consumed = min(10, plant.health)  # only consume as much as the plant has left
+			omn.energy += food_consumed
+			plant.health -= food_consumed
+			omn.bug_world.global_plant_food_amount -= food_consumed
+			if plant.size > 1:
+				plant.size -= 1  # makes sure that if the object is in BWO, it is displayed
 
 	def omn_meat(self, omn, meat):
 		self.print_collision(omn, meat)
-		omn.energy += 10
-		meat.health -= 10
-		if meat.size > 1: meat.size -= 1
+		# could be collided with and take health below 0 before it is cleaned up from the world.
+		if meat.health > 0:  # only process if the plant is still alive (i.e., has health)
+			food_consumed = min(10, meat.health)  # only consume as much as the plant has left
+			omn.energy += food_consumed
+			meat.health -= food_consumed
+			meat.bug_world.global_meat_food_amount -= food_consumed
+			if meat.size > 1:
+				meat.size -= 1  # makes sure that if the object is in BWO, it is displayed
+
 
 	def carn_meat(self, carn, meat):
-		self.print_collision(carn, meat)
-		carn.energy += 10
-		meat.health -= 10
-		if meat.size > 1: meat.size -= 1
+		if meat.health > 0:  # only process if the plant is still alive (i.e., has health)
+			food_consumed = min(10, meat.health)  # only consume as much as the plant has left
+			carn.energy += food_consumed
+			meat.health -= food_consumed
+			meat.bug_world.global_meat_food_amount -= food_consumed
+			if meat.size > 1:
+				meat.size -= 1  # makes sure that if the object is in BWO, it is displayed
 
 #Bug obstacle interactions
 	def herb_obst(self, herb, obst):
@@ -483,6 +502,8 @@ class BugWorld:  # defines the world, holds the objects, defines the rules of in
 	valid_population_types = {BWOType.OMN, BWOType.HERB, BWOType.CARN}  # the different types of populations allowed
 
 	global_plant_food_amount = 0
+	global_meat_food_amount = 0
+
 
 	def __init__(self):
 
@@ -553,7 +574,7 @@ class BugWorld:  # defines the world, holds the objects, defines the rules of in
 			amt_needed = target_food - self.global_plant_food_amount
 			num_to_add = int(amt_needed/health_per_plant)
 
-			for i in range(1, num_to_add):
+			for i in range(0, num_to_add):
 				start_pos = BugWorld.get_random_location_in_world(self)
 				self.WorldObjects.append(Plant(self, start_pos, "P" + str(i)))
 
@@ -752,6 +773,8 @@ class Meat(BWObject):
 		self.ci = coll.CollisionInterface(bug_world.collisions, self)
 		self.ci.register_as_emitter(self, coll.Collisions.PHYSICAL)
 		self.ci.register_as_emitter(self, coll.Collisions.VISUAL)
+		self.bug_world.global_plant_meat_amount += self.health
+
 
 
 class Plant(BWObject):
