@@ -3,12 +3,13 @@ import numpy as np
 import random
 from itertools import count
 
-from memory_profiler import profile
-import sys
-import gc
-import objgraph
-import os
-os.environ["PATH"] += os.pathsep + 'C:/Program Files (x86)/Graphviz2.38/bin/'
+#comment out debugging imports
+#from memory_profiler import profile
+#import sys
+#import gc
+#import objgraph
+#import os
+#os.environ["PATH"] += os.pathsep + 'C:/Program Files (x86)/Graphviz2.38/bin/'
 
 
 #Going to use 3D matrices even if in 2d
@@ -333,6 +334,7 @@ class PhysicalCollisionMatrix(coll.CollisionMatrix):
 	def herb_plant(self, herb, plant):
 		self.print_collision(herb, plant)
 
+		#TODO: this is very redundant code.  should be refactored, wait until put into a population control.
 		# could be collided with and take health below 0 before it is cleaned up from the world.
 		if plant.health > 0:  # only process if the plant is still alive (i.e., has health)
 			food_consumed = min(10, plant.health)  # only consume as much as the plant has left
@@ -574,6 +576,7 @@ class BugWorld:  # defines the world, holds the objects, defines the rules of in
 			amt_needed = target_food - self.global_plant_food_amount
 			num_to_add = int(amt_needed/health_per_plant)
 
+			# TODO: change this to objs_to_add once returned from plant population
 			for i in range(0, num_to_add):
 				start_pos = BugWorld.get_random_location_in_world(self)
 				self.WorldObjects.append(Plant(self, start_pos, "P" + str(i)))

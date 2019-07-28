@@ -5,7 +5,9 @@ import math
 import neat as NEAT
 from neat.math_util import mean
 from neat.reporting import ReporterSet
-from memory_profiler import profile
+
+#only for debugging memory
+#from memory_profiler import profile
 
 import BugWorld as bw
 '''
