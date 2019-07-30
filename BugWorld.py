@@ -495,7 +495,7 @@ class BugWorld:  # defines the world, holds the objects, defines the rules of in
 	NUM_OBSTACLES = 10
 
 	# control reproduction in the world
-	NUM_STEPS_BEFORE_REPRODUCTION = 100
+	NUM_STEPS_BEFORE_REPRODUCTION = 500
 
 	IDENTITY = np.identity(4, int)  # make a specific version in case change dimension from 3 to 2
 	MAP_TO_CANVAS = [[1,0,0,0], [0,-1,0,BOUNDARY_HEIGHT], [0,0,-1,0], [0,0,0,1]]  # flip x-axis and translate origin
