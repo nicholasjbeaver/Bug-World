@@ -1,5 +1,8 @@
 import logging
 
+logger = logging.getLogger()
+logger.setLevel(logging.ERROR)
+
 """
 Collision API
 
@@ -52,6 +55,10 @@ class CollisionInterface:
 				self.collisions.deregister_emitter(collision_object, collision_type)
 			else:
 				self.collisions.deregister_detector(collision_object, collision_type)
+
+		self.collision_registration_list.clear()
+		self.collisions = None
+		self.owner = None
 
 	def is_this_me(self, co2):
 		if self.owner == co2.ci.owner:
@@ -153,7 +160,7 @@ class CollisionMatrix:
 		dx = detector.get_abs_x() - emitter.get_abs_x()
 		dy = detector.get_abs_y() - emitter.get_abs_y()
 		dist_sqrd = (dx * dx) + (dy * dy)
-		return  {'dist_sqrd':dist_sqrd}
+		return {'dist_sqrd':dist_sqrd}
 
 	def print_collision(self, OB1, OB2):
 		logging.debug(OB1.name + ' T:' + str(OB1.type) + ", " + OB2.name + ' T:' + str(OB2.type))
